@@ -1,7 +1,15 @@
-import { Pool, PoolConfig } from 'pg';
+import { Pool, PoolConfig, QueryResult, QueryResultRow } from 'pg';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
 
-dotenv.config();
+// Check both root .env and local .env
+const rootEnvPath = path.resolve(__dirname, '../../../.env');
+if (fs.existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+} else {
+  dotenv.config();
+}
 
 function isPlaceholder(val?: string): boolean {
   if (!val) return true;
@@ -82,6 +90,21 @@ export function getPool(): Pool {
     });
   }
   return poolInstance;
+}
+
+export async function query<R extends QueryResultRow = any>(
+  text: string,
+  params?: unknown[]
+): Promise<QueryResult<R>> {
+  const pool = getPool();
+  return pool.query<R>(text, params);
+}
+
+export async function closePool(): Promise<void> {
+  if (poolInstance) {
+    await poolInstance.end();
+    poolInstance = null;
+  }
 }
 
 export interface DbStatus {

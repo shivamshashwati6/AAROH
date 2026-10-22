@@ -75,7 +75,8 @@ export interface CitizenReport {
   description: string;
   disaster_type?: DisasterType;
   severity?: 'low' | 'medium' | 'high' | 'critical';
-  categories: ReportCategory[];
+  categories?: ReportCategory[];
+  category?: string;
   people_affected?: number | null;
   medical_need: boolean;
   confidence: number;
@@ -107,12 +108,18 @@ export interface Shelter {
 
 export type RoadStatus = 'accessible' | 'partial' | 'blocked';
 
+export interface RoadGeometry {
+  type: 'LineString';
+  coordinates: [number, number][]; // [lng, lat]
+}
+
 export interface RoadSegment {
   id: string;
   name: string;
   status: RoadStatus;
   length_km: number;
   risk_score: number;
+  geometry?: RoadGeometry | null;
 }
 
 export type PlanStatus =
@@ -180,3 +187,124 @@ export interface SimulationResult {
   suggested_mitigations: string[];
   created_at: string;
 }
+
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface DemandResourceItem {
+  resource_type: 'food_kits' | 'water_units' | 'boats' | 'medical_teams';
+  name: string;
+  quantity: number;
+  unit: string;
+  formula: string;
+  explanation: string;
+  is_assumed_param: boolean;
+}
+
+export interface ZoneDemandResult {
+  zone_id: string;
+  zone_name: string;
+  affected_population: number;
+  priority_score: number;
+  band: PriorityBand;
+  severity: string;
+  medical_risk: string;
+  accessibility: number;
+  vulnerability: number;
+  is_simulated: boolean;
+  planning_horizon_days: number;
+  demands: {
+    food_kits: DemandResourceItem;
+    water_units: DemandResourceItem;
+    boats: DemandResourceItem;
+    medical_teams: DemandResourceItem;
+  };
+  summary_explanation: string;
+  generated_at: string;
+}
+
+export interface CenterAllocationDetail {
+  center_id: string;
+  center_name: string;
+  distance_km: number;
+  allocated_quantity: number;
+  unit: string;
+}
+
+export interface ResourceAllocationItem {
+  resource_type: 'food_kits' | 'water_units' | 'boats' | 'medical_teams';
+  name: string;
+  unit: string;
+  requested_quantity: number;
+  available_quantity: number;
+  allocated_quantity: number;
+  unmet_quantity: number;
+  shortage_detected: boolean;
+  supplying_centers: CenterAllocationDetail[];
+  explanation: string;
+}
+
+export interface ZoneAllocationResult {
+  zone_id: string;
+  zone_name: string;
+  priority_score: number;
+  priority_band: PriorityBand;
+  is_simulated: boolean;
+  planning_horizon_days: number;
+  demand_summary: {
+    affected_population: number;
+    food_kits: number;
+    water_units: number;
+    boats: number;
+    medical_teams: number;
+  };
+  available_inventory: {
+    food_kits: number;
+    water_units: number;
+    boats: number;
+    medical_teams: number;
+  };
+  allocations: {
+    food_kits: ResourceAllocationItem;
+    water_units: ResourceAllocationItem;
+    boats: ResourceAllocationItem;
+    medical_teams: ResourceAllocationItem;
+  };
+  primary_source_center: {
+    id: string;
+    name: string;
+    distance_km: number;
+  };
+  overall_shortage: boolean;
+  overall_explanation: string;
+  generated_at: string;
+}
+
+// -----------------------------------------------------------------------------
+// User & Authentication Domain Types
+// -----------------------------------------------------------------------------
+export type CanonicalUserRole = 'citizen' | 'command_center' | 'department';
+export type LegacyUserRole = 'admin' | 'officer' | 'coordinator' | 'team_lead';
+export type UserRole = CanonicalUserRole | LegacyUserRole;
+
+export type DepartmentType = 'health' | 'supply' | 'rescue';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  department?: DepartmentType | null;
+  created_at?: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  token?: string;
+  expires_at?: string;
+}
+

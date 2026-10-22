@@ -217,3 +217,39 @@ VALUES (
     'draft'
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- 7. Insert Canonical Warehouse Resources Inventory across 5 Relief Centers
+INSERT INTO resources (id, center_id, resource_type, quantity, status)
+VALUES
+    -- Center 3: Barpeta Relief Base #3 (Co-located with Zone A)
+    ('res-c3-food', 'center-3', 'food_kits', 2500, 'available'),
+    ('res-c3-water', 'center-3', 'water_units', 2000, 'available'),
+    ('res-c3-boats', 'center-3', 'boats', 4, 'available'),
+    ('res-c3-med', 'center-3', 'medical_teams', 5, 'available'),
+
+    -- Center 1: Guwahati Central Logistics Hub
+    ('res-c1-food', 'center-1', 'food_kits', 8000, 'available'),
+    ('res-c1-water', 'center-1', 'water_units', 6500, 'available'),
+    ('res-c1-boats', 'center-1', 'boats', 1, 'available'),
+    ('res-c1-med', 'center-1', 'medical_teams', 6, 'available'),
+
+    -- Center 2: Nalbari Rapid Response Depot
+    ('res-c2-food', 'center-2', 'food_kits', 2000, 'available'),
+    ('res-c2-water', 'center-2', 'water_units', 1800, 'available'),
+    ('res-c2-boats', 'center-2', 'boats', 1, 'available'),
+    ('res-c2-med', 'center-2', 'medical_teams', 3, 'available'),
+
+    -- Center 4: Dhubri Sector Logistics Base
+    ('res-c4-food', 'center-4', 'food_kits', 2200, 'available'),
+    ('res-c4-water', 'center-4', 'water_units', 1900, 'available'),
+    ('res-c4-boats', 'center-4', 'boats', 1, 'available'),
+    ('res-c4-med', 'center-4', 'medical_teams', 4, 'available'),
+
+    -- Center 5: Goalpara Riverine Outpost
+    ('res-c5-food', 'center-5', 'food_kits', 1500, 'available'),
+    ('res-c5-water', 'center-5', 'water_units', 1200, 'available'),
+    ('res-c5-boats', 'center-5', 'boats', 1, 'available'),
+    ('res-c5-med', 'center-5', 'medical_teams', 3, 'available')
+ON CONFLICT (id) DO UPDATE SET
+    quantity = EXCLUDED.quantity,
+    status = EXCLUDED.status;

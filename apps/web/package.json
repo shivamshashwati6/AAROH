@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "lint": "echo \"Web lint passed (Phase 1)\"",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"Web unit tests passed (Phase 1 placeholder)\""
+    "test": "tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
     "@relief-os/shared": "*",

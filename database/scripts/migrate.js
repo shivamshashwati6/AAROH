@@ -25,15 +25,19 @@ async function runMigration() {
     const postgisVersion = extRes.rows[0]?.extversion || 'Unknown';
     console.log(`[RELIEF-OS Migration] PostGIS version: ${postgisVersion}`);
 
-    // 2. Read migration SQL
-    const migrationFile = path.resolve(__dirname, '../migrations/001_initial_schema.sql');
-    if (!fs.existsSync(migrationFile)) {
-      throw new Error(`Migration file not found at: ${migrationFile}`);
-    }
-    const sql = fs.readFileSync(migrationFile, 'utf8');
+    // 2. Read migration SQL files in sequence
+    const migrationsDir = path.resolve(__dirname, '../migrations');
+    const migrationFiles = fs
+      .readdirSync(migrationsDir)
+      .filter((file) => file.endsWith('.sql'))
+      .sort();
 
-    console.log('[RELIEF-OS Migration] Applying 001_initial_schema.sql...');
-    await client.query(sql);
+    for (const file of migrationFiles) {
+      const filePath = path.join(migrationsDir, file);
+      console.log(`[RELIEF-OS Migration] Applying ${file}...`);
+      const sql = fs.readFileSync(filePath, 'utf8');
+      await client.query(sql);
+    }
 
     // 3. Verify created tables
     const tablesRes = await client.query(`
