@@ -144,11 +144,12 @@ disasterRouter.get('/demo-kpis', async (_req: Request, res: Response) => {
         affected_population: parseInt(kpi.affected_population || '18420', 10),
         critical_zones_count: parseInt(kpi.critical_zones || '7', 10),
         resource_shortages_count: 4, // 4 supply categories tracked
-        active_teams_count: parseInt(kpi.medical_teams || '21', 10) > 0 ? parseInt(kpi.medical_teams, 10) : 23,
+        active_teams_count: parseInt(kpi.medical_teams || '21', 10) > 0 ? parseInt(kpi.medical_teams, 10) : 21,
         shelter_occupancy_pct: parseInt(kpi.shelter_occupancy_pct || '71', 10),
         total_shelters: parseInt(kpi.shelters_count || '18', 10),
         relief_centers: parseInt(kpi.relief_centers_count || '5', 10),
         vehicles_deployed: parseInt(kpi.total_fleet || '21', 10),
+        total_fleet: parseInt(kpi.total_fleet || '21', 10),
         total_reports_ingested: parseInt(kpi.reports_count || '0', 10),
         target_reports_demo: 1247,
       },

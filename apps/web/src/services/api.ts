@@ -40,6 +40,7 @@ export interface DemoKPIResponse {
     total_shelters: number;
     relief_centers: number;
     vehicles_deployed: number;
+    total_fleet?: number;
     total_reports_ingested: number;
     target_reports_demo?: number;
   };
@@ -632,6 +633,7 @@ export interface SimulationRunResponse {
   comparison: {
     resources: ResourceDiffItem[];
     supplying_centers_diff: CenterSupplyDiffItem[];
+    supplying_center_changes?: CenterSupplyDiffItem[];
     new_shortages_detected: Array<{ resource: string; deficit: number }>;
     road_impact?: RoadImpactReport | null;
   };

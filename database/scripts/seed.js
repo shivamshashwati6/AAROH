@@ -76,7 +76,7 @@ async function runSeed() {
     console.log(`  • Critical Zones:           ${zonesRes.rows[0].critical_zone_count} (Target: 7)`);
     console.log(`  • Shelters Seeded:          ${sheltersRes.rows[0].shelter_count} (Target: 18)`);
     console.log(`  • Relief Centers Seeded:    ${centersRes.rows[0].center_count} (Target: 5)`);
-    console.log(`  • Dispatched Fleet Units:   ${centersRes.rows[0].total_fleet} (Target: 21)`);
+    console.log(`  • Available Fleet Units:    ${centersRes.rows[0].total_fleet} (Target: 21)`);
     console.log(`  • Zone A Priority:          ${zoneARes.rows[0]?.priority_score}/100, Band: ${zoneARes.rows[0]?.band} (Target: 94/100 Critical)`);
     
     routeRes.rows.forEach(r => {

@@ -105,6 +105,7 @@ export interface SimulationRunResult {
   comparison: {
     resources: ResourceDiffItem[];
     supplying_centers_diff: CenterSupplyDiffItem[];
+    supplying_center_changes?: CenterSupplyDiffItem[];
     new_shortages_detected: Array<{ resource: string; deficit: number }>;
     road_impact?: RoadImpactReport | null;
   };
@@ -661,6 +662,7 @@ export async function runWhatIfSimulation(
     comparison: {
       resources: resourceDiffs,
       supplying_centers_diff: centerDiffs,
+      supplying_center_changes: centerDiffs,
       new_shortages_detected: newShortages,
       road_impact: roadImpactReport,
     },

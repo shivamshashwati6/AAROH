@@ -68,7 +68,11 @@ async function extractUserFromHeader(authHeader?: string): Promise<{ user: User 
       }
       return { user: null, error: err.message, status: 401 };
     }
-    return { user: null, error: 'Invalid or unauthorized access token.', status: 401 };
+    if (err && typeof err === 'object' && 'name' in err && ((err as any).name === 'JsonWebTokenError' || (err as any).name === 'TokenExpiredError' || (err as any).name === 'NotBeforeError')) {
+      return { user: null, error: 'Invalid or unauthorized access token.', status: 401 };
+    }
+    console.error('[Auth Middleware] Database error verifying user:', err);
+    return { user: null, error: 'Database service unavailable during authentication.', status: 503 };
   }
 }
 

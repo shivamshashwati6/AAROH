@@ -473,7 +473,7 @@ export function DepartmentPage() {
                       {kpiData?.hero_zone.medical_risk.toUpperCase() || 'CRITICAL'}
                     </div>
                     <div className="text-[11px] text-slate-400 mt-1">
-                      Zone A: 1 team allocated from Center #3
+                      Zone A: 1 team allocated from Barpeta Relief Base #3 (center-3)
                     </div>
                   </div>
                 </>
@@ -504,13 +504,13 @@ export function DepartmentPage() {
 
                   <div className="bg-[#0d1522] border border-[#1f2e48] rounded-2xl p-5 shadow-lg">
                     <div className="flex items-center justify-between text-slate-400 mb-2">
-                      <span className="text-xs font-semibold uppercase tracking-wider">Potable Water Packs</span>
+                      <span className="text-xs font-semibold uppercase tracking-wider">Potable Water Units</span>
                       <LifeBuoy className="w-4 h-4 text-blue-400" />
                     </div>
                     <div className="text-2xl font-black text-white">
                       {totalWarehouseWater > 0 ? totalWarehouseWater.toLocaleString() : '13,400'} Units
                     </div>
-                    <div className="text-[11px] text-slate-400 mt-1">Clean water packs in inventory</div>
+                    <div className="text-[11px] text-slate-400 mt-1">Clean water units in inventory</div>
                   </div>
 
                   <div className="bg-[#0d1522] border border-[#1f2e48] rounded-2xl p-5 shadow-lg">
@@ -1014,7 +1014,7 @@ export function DepartmentPage() {
                                   {allocationResult.allocations.water_units.supplying_centers.map((c) => (
                                     <div key={c.center_id} className="flex items-center justify-between text-slate-400">
                                       <span>{c.center_name} ({c.distance_km.toFixed(1)} km)</span>
-                                      <span className="text-blue-400 font-mono font-bold">+{c.allocated_quantity.toLocaleString()} packs</span>
+                                      <span className="text-blue-400 font-mono font-bold">+{c.allocated_quantity.toLocaleString()} units</span>
                                     </div>
                                   ))}
                                 </div>
@@ -1092,7 +1092,7 @@ export function DepartmentPage() {
                               </span>
                             </div>
                             <div className="bg-[#070b12] border border-[#1f2e48] rounded-xl p-4 text-center">
-                              <span className="text-xs text-slate-400 block mb-1">Water Packs</span>
+                              <span className="text-xs text-slate-400 block mb-1">Water Units</span>
                               <span className="text-base font-bold text-blue-300">
                                 {allocationResult.allocations.water_units.allocated_quantity.toLocaleString()} / {allocationResult.allocations.water_units.requested_quantity.toLocaleString()}
                               </span>

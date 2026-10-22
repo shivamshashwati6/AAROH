@@ -146,8 +146,7 @@ async function runAudit() {
         resource_type: 'food_kits'
       })
     }).then(r => r.json());
-    console.log(`  • Scenario B (Stock: -80% food kits):   Run ID ${simB.simulation_id}`);
-    console.log(`    - Summary: ${simB.comparison.summary}`);
+    console.log(`    - Summary: ${simB.summary_explanation.substring(0, 80)}...`);
 
     // Scenario C: Road Blockage (Route C)
     const simC = await fetch(`${baseUrl}/simulation/run`, {
@@ -160,9 +159,24 @@ async function runAudit() {
       })
     }).then(r => r.json());
     console.log(`  • Scenario C (Road: Route C Blocked):  Run ID ${simC.simulation_id}`);
-    console.log(`    - Routing Notice: ${simC.comparison.road_impact?.routing_impact_notice.substring(0, 75)}...`);
+    // Scenario D: Compound Multi-Vector Disruption
+    const simCompound = await fetch(`${baseUrl}/simulation/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${commandAuth.token}` },
+      body: JSON.stringify({
+        zone_id: 'zone-a',
+        scenario_type: 'compound',
+        remove_vehicles: 3,
+        remove_boats: 2,
+        reduce_stock_pct: 50,
+        blocked_road_id: 'route-c'
+      })
+    }).then(r => r.json());
+    console.log(`  • Scenario D (Compound Multi-Vector): Run ID ${simCompound.simulation_id}`);
+    console.log(`    - Boat Shortage Status: ${simCompound.comparison.resources.find(r => r.resource_type === 'boats')?.shortage_status}`);
+    console.log(`    - Road Blocked: ${simCompound.comparison.road_impact?.road_id} (${simCompound.comparison.road_impact?.simulated_status})`);
 
-    // Scenario D: Mathematical Determinism Test (Run identical scenario twice)
+    // Scenario E: Mathematical Determinism Test (Run identical scenario twice)
     const simD1 = await fetch(`${baseUrl}/simulation/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${commandAuth.token}` },

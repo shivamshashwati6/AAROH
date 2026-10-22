@@ -19,6 +19,7 @@
     "test": "npm run test --workspaces --if-present",
     "db:migrate": "node database/scripts/migrate.js",
     "db:seed": "node database/scripts/seed.js",
+    "db:seed:admin": "node database/scripts/seed-admin.js",
     "db:verify": "node database/scripts/verify.js"
   },
   "keywords": [

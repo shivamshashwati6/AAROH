@@ -624,6 +624,29 @@ describe('RELIEF-OS Phase 2 Backend API Integration Tests', () => {
       assert.equal(body.total, 5);
     });
 
+    it('should verify all 5 resource centers match exact canonical names, IDs, and capacity values', async () => {
+      const res = await fetch(`${baseUrl}/api/resource-centers`);
+      assert.equal(res.status, 200);
+      const body = await res.json();
+
+      const expected = [
+        { id: 'center-1', name: 'Guwahati Central Logistics Hub', vehicles: 3, boats: 1, medical: 6 },
+        { id: 'center-2', name: 'Nalbari Rapid Response Depot', vehicles: 2, boats: 1, medical: 3 },
+        { id: 'center-3', name: 'Barpeta Relief Base #3', vehicles: 4, boats: 4, medical: 5 },
+        { id: 'center-4', name: 'Dhubri Sector Logistics Base', vehicles: 2, boats: 1, medical: 4 },
+        { id: 'center-5', name: 'Goalpara Riverine Outpost', vehicles: 2, boats: 1, medical: 3 },
+      ];
+
+      for (const exp of expected) {
+        const found = body.items.find((c: any) => c.id === exp.id);
+        assert.ok(found, `Center ${exp.id} not found`);
+        assert.equal(found.name, exp.name);
+        assert.equal(found.vehicles_available, exp.vehicles);
+        assert.equal(found.boats_available, exp.boats);
+        assert.equal(found.medical_teams_available, exp.medical);
+      }
+    });
+
     it('should return 404 for unknown resource center', async () => {
       const res = await fetch(`${baseUrl}/api/resource-centers/center-unknown-999`);
       assert.equal(res.status, 404);

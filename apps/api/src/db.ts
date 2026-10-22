@@ -54,7 +54,8 @@ export function getPoolConfig(): PoolConfig {
   const baseConfig: PoolConfig = {
     max: 10,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 10000,
+    keepAlive: true,
   };
 
   if (sslRequired && process.env.DB_SSL !== 'false') {
@@ -97,7 +98,23 @@ export async function query<R extends QueryResultRow = any>(
   params?: unknown[]
 ): Promise<QueryResult<R>> {
   const pool = getPool();
-  return pool.query<R>(text, params);
+  try {
+    return await pool.query<R>(text, params);
+  } catch (err: any) {
+    if (
+      err &&
+      (err.code === 'ECONNRESET' ||
+        err.code === '57P01' ||
+        err.code === '08006' ||
+        err.code === '08001' ||
+        err.message?.includes('closed network connection') ||
+        err.message?.includes('Connection terminated'))
+    ) {
+      // Retry once on remote pooler connection reset / terminated connection
+      return pool.query<R>(text, params);
+    }
+    throw err;
+  }
 }
 
 export async function closePool(): Promise<void> {

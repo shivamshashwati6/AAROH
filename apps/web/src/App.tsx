@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { CitizenPortalPage } from './pages/CitizenPortalPage';
@@ -13,7 +14,7 @@ import { Loader2 } from 'lucide-react';
 
 /**
  * Root index dispatcher that routes authenticated users to their designated role portal,
- * and unauthenticated visitors to the login / entry screen.
+ * and unauthenticated visitors to the public Landing Page.
  */
 function RootDispatcher() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -35,7 +36,7 @@ function RootDispatcher() {
     return <Navigate to={getHomeRouteForUser(user)} replace />;
   }
 
-  return <Navigate to="/login" replace />;
+  return <LandingPage />;
 }
 
 export function App() {

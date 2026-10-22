@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getHomeRouteForUser } from '../utils/auth-roles';
 import {
-  ShieldAlert,
   Lock,
   Mail,
   User as UserIcon,
@@ -13,6 +12,9 @@ import {
   Loader2,
   ShieldCheck,
   CheckCircle2,
+  ArrowLeft,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 export function SignupPage() {
@@ -23,6 +25,8 @@ export function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -75,67 +79,89 @@ export function SignupPage() {
   const displayError = formError || authError;
 
   return (
-    <div className="min-h-screen bg-[#070b12] text-slate-200 flex flex-col justify-between">
+    <div className="min-h-screen bg-[#070b12] text-slate-200 flex flex-col justify-between selection:bg-cyan-500 selection:text-black">
       {/* Top Emergency Notice */}
-      <div className="bg-amber-950/40 border-b border-amber-800/40 px-4 py-2.5 text-center text-xs text-amber-300">
+      <aside aria-label="Emergency notice" className="bg-amber-950/40 border-b border-amber-800/40 px-4 py-2.5 text-center text-xs text-amber-300">
         <div className="max-w-4xl mx-auto flex items-center justify-center gap-2 flex-wrap">
           <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
           <span>Immediate disaster emergency? You do not need to register to seek help.</span>
           <Link
             to="/report"
-            className="font-bold underline text-amber-200 hover:text-white ml-1"
+            className="font-bold underline text-amber-200 hover:text-white ml-1 transition"
           >
             Submit an Emergency Report Directly &rarr;
           </Link>
         </div>
-      </div>
+      </aside>
 
-      {/* Main Registration Card */}
+      {/* Main Registration Container */}
       <div className="flex-1 flex items-center justify-center p-4 sm:p-6 my-8">
         <div className="w-full max-w-md bg-[#0d1522] border border-[#1f2e48] rounded-2xl shadow-2xl p-6 sm:p-8 backdrop-blur">
+          {/* Back to Platform Overview Link */}
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-400 transition mb-6 group"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition" />
+            <span>Back to Platform Overview</span>
+          </Link>
+
           {/* Logo & Platform Header */}
-          <div className="text-center mb-6">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-teal-950/50 mx-auto mb-4">
-              <ShieldCheck className="w-8 h-8 text-white" />
-            </div>
+          <div className="text-center mb-8">
+            <Link to="/" className="inline-block group">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-950/50 mx-auto mb-4 group-hover:scale-105 transition">
+                <ShieldCheck className="w-8 h-8 text-white" />
+              </div>
+            </Link>
             <h1 className="text-2xl font-black tracking-tight text-white">Citizen Registration</h1>
+            <p className="text-xs text-cyan-300 font-medium mt-0.5">
+              RELIEF-OS Community Access Portal
+            </p>
             <p className="text-xs text-slate-400 mt-1">
-              Create a verified account to submit distress reports, track relief updates, and access shelters
+              Create an account to track emergency reports and receive shelter advisories.
             </p>
           </div>
 
-          {/* Role Policy Notice */}
-          <div className="mb-6 p-3 rounded-xl bg-blue-950/30 border border-blue-800/40 text-[11px] text-blue-200 flex items-start gap-2.5">
-            <ShieldAlert className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-semibold text-white">Public Account Policy:</span> Public self-registration is strictly restricted to <span className="text-cyan-300 font-bold">Citizen</span> accounts. Command Center and Department credentials require official administrative authorization.
+          {/* Public Citizen Scope Notice */}
+          <div className="mb-6 bg-cyan-950/40 border border-cyan-800/50 p-3.5 rounded-xl flex items-start gap-3">
+            <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-slate-300 leading-relaxed">
+              <span className="font-bold text-white block">Citizen Portal Scope</span>
+              This registration is for community members and affected residents. Official command center, admin, and department accounts are assigned by disaster administration.
             </div>
           </div>
 
-          {/* Error Banner */}
+          {/* Error Alert Box */}
           {displayError && (
-            <div className="mb-6 p-3.5 rounded-xl bg-red-950/40 border border-red-800/60 text-red-200 text-xs flex items-start gap-2.5">
+            <div className="mb-6 p-4 rounded-xl bg-red-950/50 border border-red-800/60 text-red-300 text-xs flex items-start gap-3 animate-fadeIn">
               <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <div className="flex-1">{displayError}</div>
+              <div className="flex-1">
+                <span className="font-semibold block mb-0.5">Registration Failed</span>
+                <span>{displayError}</span>
+              </div>
             </div>
           )}
 
           {/* Registration Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
+              <label
+                htmlFor="signup-name"
+                className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider"
+              >
                 Full Name
               </label>
               <div className="relative">
                 <UserIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                 <input
+                  id="signup-name"
                   type="text"
                   value={name}
                   onChange={(e) => {
                     setName(e.target.value);
                     if (formError) setFormError(null);
                   }}
-                  placeholder="Aarav Sharma"
+                  placeholder="e.g. Rupjyoti Das"
                   autoComplete="name"
                   required
                   className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
@@ -144,19 +170,23 @@ export function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
+              <label
+                htmlFor="signup-email"
+                className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider"
+              >
                 Email Address
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                 <input
+                  id="signup-email"
                   type="email"
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
                     if (formError) setFormError(null);
                   }}
-                  placeholder="citizen@example.com"
+                  placeholder="your.email@example.com"
                   autoComplete="email"
                   required
                   className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
@@ -165,13 +195,17 @@ export function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                Password <span className="text-slate-500 font-normal lowercase">(minimum 8 characters)</span>
+              <label
+                htmlFor="signup-password"
+                className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider"
+              >
+                Password <span className="text-slate-500 font-normal">(Min 8 characters)</span>
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                 <input
-                  type="password"
+                  id="signup-password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
@@ -180,19 +214,31 @@ export function SignupPage() {
                   placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
                   autoComplete="new-password"
                   required
-                  className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
+                  className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 p-1 text-slate-400 hover:text-slate-200 transition focus:outline-none"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
+              <label
+                htmlFor="signup-confirm-password"
+                className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider"
+              >
                 Confirm Password
               </label>
               <div className="relative">
-                <CheckCircle2 className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                 <input
-                  type="password"
+                  id="signup-confirm-password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => {
                     setConfirmPassword(e.target.value);
@@ -201,36 +247,44 @@ export function SignupPage() {
                   placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
                   autoComplete="new-password"
                   required
-                  className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
+                  className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-2.5 p-1 text-slate-400 hover:text-slate-200 transition focus:outline-none"
+                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
             <button
               type="submit"
               disabled={submitting || isLoading}
-              className="w-full mt-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-bold py-3 px-4 rounded-xl text-sm transition shadow-lg shadow-teal-900/30 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full mt-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white font-bold py-3 px-4 rounded-xl text-sm transition shadow-lg shadow-cyan-900/30 flex items-center justify-center gap-2 cursor-pointer"
             >
               {submitting || isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Creating Citizen Account...</span>
+                  <span>Creating Account...</span>
                 </>
               ) : (
                 <>
-                  <span>Complete Citizen Registration</span>
+                  <span>Create Citizen Account</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Back to Login */}
+          {/* Already have an account link */}
           <div className="mt-6 pt-5 border-t border-[#1f2e48] text-center">
             <p className="text-xs text-slate-400">
               Already have an account?{' '}
               <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-semibold underline">
-                Sign In
+                Sign In to Workspace
               </Link>
             </p>
           </div>
@@ -239,7 +293,7 @@ export function SignupPage() {
 
       {/* Footer */}
       <footer className="border-t border-[#1f2e48] bg-[#0d1522] px-6 py-4 text-center text-xs text-slate-500">
-        RELIEF-OS &copy; 2026 &bull; Secure Authentication &amp; Public Citizen Portal.
+        RELIEF-OS &copy; 2026 &bull; Secure Authentication &amp; Role-Guarded Access Engine.
       </footer>
     </div>
   );

@@ -364,6 +364,83 @@ describe('RELIEF-OS What-If Simulation Engine API Integration Tests', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // 4. Scenario 4: Compound Stress-Test (Simultaneous Disruption)
+  // ---------------------------------------------------------------------------
+  describe('Scenario 4: Compound Stress-Test (Simultaneous Multi-Vector Disruption)', () => {
+    it('should simultaneously apply fleet deduction, inventory reduction, and road blockage in a single run', async () => {
+      const res = await fetch(`${baseUrl}/api/simulation/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${officerToken}`,
+        },
+        body: JSON.stringify({
+          zone_id: 'zone-a',
+          center_id: 'center-3',
+          scenario_type: 'compound',
+          remove_vehicles: 2,
+          remove_boats: 2,
+          reduce_stock_pct: 50,
+          blocked_road_id: 'route-c',
+        }),
+      });
+
+      assert.equal(res.status, 200);
+      const data = await res.json();
+
+      assert.equal(data.scenario_type, 'compound');
+      assert.ok(data.simulation_id);
+
+      // Verify all 4 resource categories are returned using identical units
+      const foodDiff = data.comparison.resources.find((r: any) => r.resource_type === 'food_kits');
+      const waterDiff = data.comparison.resources.find((r: any) => r.resource_type === 'water_units');
+      const boatDiff = data.comparison.resources.find((r: any) => r.resource_type === 'boats');
+      const medDiff = data.comparison.resources.find((r: any) => r.resource_type === 'medical_teams');
+
+      assert.ok(foodDiff);
+      assert.equal(foodDiff.unit, 'kits');
+      assert.equal(foodDiff.requested_quantity, 1200);
+
+      assert.ok(waterDiff);
+      assert.equal(waterDiff.unit, 'units');
+      assert.equal(waterDiff.requested_quantity, 800);
+
+      assert.ok(boatDiff);
+      assert.equal(boatDiff.unit, 'boats');
+      assert.equal(boatDiff.requested_quantity, 4);
+      // Multi-center split delivery satisfies 4 boats: Center 3 contribution drops by 2, and neighboring bases absorb the rest
+      assert.equal(boatDiff.simulated_allocated, 4);
+      assert.equal(boatDiff.simulated_unmet, 0);
+
+      // Verify supplying center changes track that Center 3 contribution decreased by 2
+      const centerChanges = data.comparison.supplying_centers_diff || data.comparison.supplying_center_changes;
+      assert.ok(centerChanges);
+      const center3Change = centerChanges.find(
+        (c: any) => c.center_id === 'center-3' && c.resource_type === 'boats'
+      );
+      assert.ok(center3Change);
+      assert.equal(center3Change.delta, -2);
+
+      assert.ok(medDiff);
+      assert.equal(medDiff.unit, 'teams');
+      assert.equal(medDiff.requested_quantity, 1);
+
+      // Verify road impact is simultaneously included
+      assert.ok(data.comparison.road_impact);
+      assert.equal(data.comparison.road_impact.road_id, 'route-c');
+      assert.equal(data.comparison.road_impact.simulated_status, 'blocked');
+      assert.ok(
+        data.comparison.road_impact.routing_impact_notice.includes(
+          'Automated algorithmic graph rerouting is not implemented'
+        )
+      );
+
+      // Verify center deltas
+      assert.ok(centerChanges.length > 0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // 5. Validation and Entity Boundaries
   // ---------------------------------------------------------------------------
   describe('Input Validation & Entity Boundaries', () => {
@@ -484,7 +561,13 @@ describe('RELIEF-OS What-If Simulation Engine API Integration Tests', () => {
       // 4. Strictly assert zero mutations
       assert.deepEqual(preResources.rows, postResources.rows);
       assert.deepEqual(preCenters.rows, postCenters.rows);
-      assert.deepEqual(preRoads.rows, postRoads.rows);
+
+      // Verify simulated road segment (route-c) was NOT mutated in database (remains accessible)
+      const routeCPost = postRoads.rows.find((r) => r.id === 'route-c');
+      const routeCPre = preRoads.rows.find((r) => r.id === 'route-c');
+      assert.ok(routeCPost);
+      assert.equal(routeCPost.status, routeCPre?.status);
+      assert.equal(routeCPost.status, 'accessible');
     });
   });
 

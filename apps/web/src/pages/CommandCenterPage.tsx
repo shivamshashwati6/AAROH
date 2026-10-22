@@ -388,17 +388,17 @@ export function CommandCenterPage() {
           {/* KPI 5: Available Response Fleet */}
           <div className="bg-[#0d1522] border border-[#1f2e48] rounded-xl p-4 hover:border-blue-500/40 transition">
             <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
-              <span>Response Fleet</span>
+              <span>Available Response Fleet</span>
               <Truck className="w-4 h-4 text-blue-400" />
             </div>
             <div className="text-xl sm:text-2xl font-black text-white">
               {loading ? (
                 <div className="h-7 w-12 bg-slate-800 rounded animate-pulse" />
               ) : (
-                totalFleetUnits || kpiData?.kpis.vehicles_deployed || '21'
+                totalFleetUnits || kpiData?.kpis.total_fleet || kpiData?.kpis.vehicles_deployed || '21'
               )}
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">{centers.length || 5} Centers Staged</div>
+            <div className="text-[11px] text-slate-400 mt-1">{centers.length || 5} Centers Staged (Available)</div>
           </div>
 
           {/* KPI 6: Ingested Citizen Reports */}
@@ -1139,7 +1139,7 @@ export function CommandCenterPage() {
                           >
                             <option value="">All Consumables (Food &amp; Water)</option>
                             <option value="food_kits">Food Relief Ration Kits</option>
-                            <option value="water_units">Potable Water Packs</option>
+                            <option value="water_units">Potable Water Units</option>
                           </select>
                         </div>
 
