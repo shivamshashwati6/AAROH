@@ -279,17 +279,25 @@ export function computeDeterministicAllocation(
   };
 }
 
+export interface ZoneAllocationContext {
+  zone: any;
+  demandInput: ZoneDemandInput;
+  demandResult: ZoneDemandResult;
+  inventoryPool: InventoryPool;
+  baselineAllocation: ZoneAllocationResult;
+}
+
 /**
- * Loads actual database inventory and generates a deterministic allocation plan for a zone.
+ * Loads actual database inventory, centers, and demand, producing both the raw context and baseline allocation.
  */
-export async function calculateZoneAllocation(
+export async function loadZoneAllocationContext(
   zoneId: string,
   options?: {
     planning_days?: number;
     customDemandInput?: ZoneDemandInput;
     customConfig?: DemandConfig;
   }
-): Promise<ZoneAllocationResult> {
+): Promise<ZoneAllocationContext> {
   // 1. Fetch zone details
   const zoneRes = await query(
     `SELECT 
@@ -419,6 +427,30 @@ export async function calculateZoneAllocation(
     }
   }
 
-  // 5. Run deterministic allocation algorithm
-  return computeDeterministicAllocation(demandResult, inventoryPool);
+  // 5. Run deterministic allocation algorithm on deep cloned pool to keep context pristine
+  const baselinePoolClone: InventoryPool = JSON.parse(JSON.stringify(inventoryPool));
+  const baselineAllocation = computeDeterministicAllocation(demandResult, baselinePoolClone);
+
+  return {
+    zone: zoneRow,
+    demandInput,
+    demandResult,
+    inventoryPool,
+    baselineAllocation,
+  };
+}
+
+/**
+ * Loads actual database inventory and generates a deterministic allocation plan for a zone.
+ */
+export async function calculateZoneAllocation(
+  zoneId: string,
+  options?: {
+    planning_days?: number;
+    customDemandInput?: ZoneDemandInput;
+    customConfig?: DemandConfig;
+  }
+): Promise<ZoneAllocationResult> {
+  const context = await loadZoneAllocationContext(zoneId, options);
+  return context.baselineAllocation;
 }

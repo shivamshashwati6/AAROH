@@ -173,6 +173,30 @@ describe('RELIEF-OS Step 3: Backend Role-Based Authorization & API Security Test
       });
       assert.equal(res.status, 200);
     });
+
+    it('should forbid non-rescue departments (health, supply) from updating road status with 403', async () => {
+      const resSupply = await fetch(`${baseUrl}/api/road-segments/route-b`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${deptSupplyToken}`,
+        },
+        body: JSON.stringify({ status: 'blocked' }),
+      });
+      assert.equal(resSupply.status, 403);
+      const bodySupply = await resSupply.json();
+      assert.match(bodySupply.error, /forbidden/i);
+
+      const resHealth = await fetch(`${baseUrl}/api/road-segments/route-b`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${deptHealthToken}`,
+        },
+        body: JSON.stringify({ status: 'accessible' }),
+      });
+      assert.equal(resHealth.status, 403);
+    });
   });
 
   // ---------------------------------------------------------------------------

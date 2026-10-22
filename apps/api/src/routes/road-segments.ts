@@ -85,7 +85,7 @@ roadSegmentRouter.get('/', async (req: Request, res: Response) => {
 roadSegmentRouter.patch(
   '/:id',
   requireAuth,
-  requireRole(['command_center', 'officer', 'admin', 'department', 'coordinator', 'team_lead']),
+  requireRole(['command_center', 'officer', 'admin', 'department', 'coordinator', 'team_lead'], ['rescue']),
   async (req: Request, res: Response) => {
     const { id } = req.params;
     const parsed = patchRoadStatusSchema.safeParse(req.body);

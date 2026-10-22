@@ -21,6 +21,7 @@ import { reportRouter } from './routes/reports';
 import { roadSegmentRouter } from './routes/road-segments';
 import { authRouter } from './routes/auth';
 import { recommendationRouter } from './routes/recommendations';
+import { simulationRouter } from './routes/simulations';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -59,6 +60,8 @@ app.use('/api/road-segments', roadSegmentRouter);
 app.use('/api/road_segments', roadSegmentRouter); // API compatibility alias
 app.use('/api/recommendations', recommendationRouter);
 app.use('/api/plans', recommendationRouter); // PRD API alias (POST /api/plans/:id/approve, etc.)
+app.use('/api/simulation', simulationRouter);
+app.use('/api/simulations', simulationRouter); // PRD Module 9 alias
 
 
 // -----------------------------------------------------------------------------
