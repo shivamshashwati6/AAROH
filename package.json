@@ -1,0 +1,33 @@
+{
+  "name": "relief-os-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RELIEF-OS - AI-Powered Disaster Response & Resource Intelligence Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:web": "npm run dev --workspace=@relief-os/web",
+    "dev:api": "npm run dev --workspace=@relief-os/api",
+    "build": "npm run build --workspaces --if-present",
+    "build:web": "npm run build --workspace=@relief-os/web",
+    "build:api": "npm run build --workspace=@relief-os/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:migrate": "node database/scripts/migrate.js",
+    "db:seed": "node database/scripts/seed.js",
+    "db:verify": "node database/scripts/verify.js"
+  },
+  "keywords": [
+    "disaster-response",
+    "decision-support",
+    "postgis",
+    "resource-allocation",
+    "relief-os"
+  ],
+  "author": "RELIEF-OS Team",
+  "license": "UNLICENSED"
+}
