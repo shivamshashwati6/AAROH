@@ -106,7 +106,7 @@ export function DepartmentLoginPage() {
             </div>
             <h1 className="text-2xl font-black tracking-tight text-white">Department Login</h1>
             <p className="text-xs text-indigo-300 font-medium mt-0.5">
-              RELIEF-OS Logistics &amp; Field Responder Operations
+              AAROH Logistics &amp; Field Responder Operations
             </p>
             <p className="text-xs text-slate-400 mt-1">
               Authorized access for Health, Supply, and Rescue operational teams.
@@ -256,7 +256,7 @@ export function DepartmentLoginPage() {
 
       {/* Footer */}
       <footer className="border-t border-[#1f2e48] bg-[#0d1522] px-6 py-4 text-center text-xs text-slate-500">
-        RELIEF-OS &copy; 2026 &bull; Secure Authentication &amp; Role-Guarded Access Engine.
+        AAROH &copy; 2026 &bull; Secure Authentication &amp; Role-Guarded Access Engine.
       </footer>
     </div>
   );

@@ -1,5 +1,5 @@
 /**
- * Resilient storage utility for RELIEF-OS.
+ * Resilient storage utility for AAROH.
  * Falls back to an in-memory store in non-browser or storage-restricted environments (such as Node.js test suites).
  */
 

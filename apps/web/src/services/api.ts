@@ -1,7 +1,7 @@
 /**
- * RELIEF-OS Frontend API Client Service
+ * AAROH Frontend API Client Service
  * Connects React UI to the Express + Supabase PostGIS backend.
- * Uses VITE_API_URL with safe fallback to http://localhost:4000/api.
+ * Uses VITE_API_URL with safe production and development fallbacks.
  */
 
 import {
@@ -33,9 +33,20 @@ import {
 import { safeStorage } from '../utils/storage';
 import { AUTH_TOKEN_KEY, AUTH_USER_KEY } from '../utils/auth-roles';
 
-const API_BASE_URL =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
-  'http://localhost:4000/api';
+export const getApiBaseUrl = (): string => {
+  const envUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_URL : undefined;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+  // Local development default
+  if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+    return 'http://localhost:4000/api';
+  }
+  // Production fallback to relative /api (preventing mixed-content blocking on HTTPS hosts)
+  return '/api';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export interface DemoKPIResponse {
   disaster_id: string;

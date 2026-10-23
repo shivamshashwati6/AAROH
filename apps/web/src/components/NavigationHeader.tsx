@@ -23,13 +23,13 @@ export function NavigationHeader() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-black text-lg tracking-wider text-white">RELIEF-OS</span>
+                <span className="font-black text-lg tracking-wider text-white">AAROH</span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-950 text-cyan-400 border border-cyan-800">
                   SECURE
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 hidden sm:block">
-                Disaster Response &amp; Resource Intelligence
+                AI-Powered Disaster Response &amp; Resource Intelligence
               </p>
             </div>
           </Link>
@@ -106,7 +106,7 @@ export function NavigationHeader() {
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/50 border border-red-800/50 text-red-300 text-xs font-semibold transition"
-                title="Sign out of RELIEF-OS session"
+                title="Sign out of AAROH session"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span className="hidden xs:inline">Sign Out</span>

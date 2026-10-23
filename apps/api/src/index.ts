@@ -31,19 +31,30 @@ import { settingsRouter } from './routes/settings';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const configuredOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const isAllowedOrigin = (origin: string): boolean => {
+  if (configuredOrigins.includes(origin)) return true;
+  // Local development on localhost or 127.0.0.1 (any port)
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  // Production Vercel frontend origin
+  if (origin === 'https://aaroh-plum.vercel.app') return true;
+  // Vercel preview deployments (e.g. https://aaroh-*-shivamshashwati6s-projects.vercel.app)
+  if (/^https:\/\/aaroh-[a-z0-9-]+-shivamshashwati6s-projects\.vercel\.app$/.test(origin)) return true;
+  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin)) return true;
+  return false;
+};
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (
-        origin === CORS_ORIGIN ||
-        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
-      ) {
+      if (!origin || isAllowedOrigin(origin)) {
         return callback(null, true);
       }
-      return callback(new Error('Not allowed by CORS'));
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
     credentials: true,
   })
@@ -60,9 +71,30 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Serverless path prefix normalizer (ensures routes match if Vercel serverless strips /api prefix)
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  if (!req.url.startsWith('/api') && !req.url.startsWith('/_')) {
+    req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
+  }
+  next();
+});
+
 // -----------------------------------------------------------------------------
-// Health Check Endpoint
+// Root & Health Check Endpoints
 // -----------------------------------------------------------------------------
+app.get('/api', async (_req: Request, res: Response) => {
+  const db = await checkDbStatus();
+  res.status(200).json({
+    status: 'healthy',
+    service: 'AAROH Decision Engine API',
+    version: '0.2.0',
+    phase: 'Phase 2 - Backend API & Database Integration',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    database: db,
+  });
+});
+
 app.get('/api/health', async (_req: Request, res: Response) => {
   const db = await checkDbStatus();
   res.status(200).json({
@@ -124,7 +156,7 @@ const isTest =
   process.env.npm_lifecycle_event === 'test' ||
   process.argv.some((arg) => arg.includes('test'));
 
-if (!isTest) {
+if (!isTest && !process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`[RELIEF-OS API] Decision Engine Server listening on port ${PORT}`);
     console.log(`[RELIEF-OS API] Health endpoint available at http://localhost:${PORT}/api/health`);

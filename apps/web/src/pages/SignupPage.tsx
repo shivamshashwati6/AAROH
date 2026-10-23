@@ -119,7 +119,7 @@ export function SignupPage() {
             </Link>
             <h1 className="text-2xl font-black tracking-tight text-white">Citizen Registration</h1>
             <p className="text-xs text-cyan-300 font-medium mt-0.5">
-              RELIEF-OS Community Access Portal
+              AAROH Community Access Portal
             </p>
             <p className="text-xs text-slate-400 mt-1">
               Create an account to track emergency reports and receive shelter advisories.
@@ -303,7 +303,7 @@ export function SignupPage() {
 
       {/* Footer */}
       <footer className="border-t border-[#1f2e48] bg-[#0d1522] px-6 py-4 text-center text-xs text-slate-500">
-        RELIEF-OS &copy; 2026 &bull; Secure Authentication &amp; Role-Guarded Access Engine.
+        AAROH &copy; 2026 &bull; Secure Authentication &amp; Role-Guarded Access Engine.
       </footer>
     </div>
   );

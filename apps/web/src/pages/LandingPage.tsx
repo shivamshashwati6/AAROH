@@ -53,10 +53,10 @@ export function LandingPage() {
             </div>
             <div>
               <span className="text-xl font-black tracking-tight text-white block leading-none">
-                RELIEF<span className="text-cyan-400">-OS</span>
+                AAROH
               </span>
               <span className="text-[10px] text-slate-400 tracking-wider uppercase block font-medium mt-0.5">
-                Disaster Intelligence Platform
+                AI-Powered Disaster Response &amp; Resource Intelligence
               </span>
             </div>
           </Link>
@@ -205,7 +205,7 @@ export function LandingPage() {
           </p>
 
           <p className="text-sm sm:text-base text-slate-300 max-w-3xl mx-auto leading-relaxed mb-8">
-            RELIEF-OS aggregates community distress reports, pinpoints high-priority cut-off zones with
+            AAROH aggregates community distress reports, pinpoints high-priority cut-off zones with
             transparent multi-factor scoring, calculates critical food, potable water, boat, and medical demand,
             and coordinates regional resource allocation for response teams.
           </p>
@@ -273,7 +273,7 @@ export function LandingPage() {
             Ground-Truth Intelligence for Disaster Operations
           </h2>
           <p className="text-sm sm:text-base text-slate-400 leading-relaxed">
-            Every capability in RELIEF-OS is deterministically modeled, backed by PostGIS spatial queries,
+            Every capability in AAROH is deterministically modeled, backed by PostGIS spatial queries,
             and engineered to provide actionable visibility without inventing data or replacing human command.
           </p>
         </div>
@@ -386,7 +386,7 @@ export function LandingPage() {
               Structured Workflow for Emergency Coordinators
             </h2>
             <p className="text-sm sm:text-base text-slate-400 leading-relaxed">
-              From the first community distress call to the commander’s final approval, RELIEF-OS ensures
+              From the first community distress call to the commander’s final approval, AAROH ensures
               every step is grounded in verified data.
             </p>
           </div>
@@ -444,7 +444,7 @@ export function LandingPage() {
                 Human-in-the-Loop Safety Governance
               </h4>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                RELIEF-OS provides decision support and predictive recommendations. The platform strictly does
+                AAROH provides decision support and predictive recommendations. The platform strictly does
                 <strong> not autonomously dispatch vehicles</strong>, decrement live warehouse stocks, or alter
                 field resources without explicit human authorization.
               </p>
@@ -471,7 +471,7 @@ export function LandingPage() {
             Specialized Workspaces for Every Responder
           </h2>
           <p className="text-sm sm:text-base text-slate-400 leading-relaxed">
-            When you sign in, RELIEF-OS verifies your role and routes you directly to your operational workspace.
+            When you sign in, AAROH verifies your role and routes you directly to your operational workspace.
           </p>
         </div>
 
@@ -623,7 +623,7 @@ export function LandingPage() {
                   <ShieldAlert className="w-5 h-5" />
                 </div>
                 <span className="text-lg font-black tracking-tight text-white">
-                  RELIEF<span className="text-cyan-400">-OS</span>
+                  AAROH
                 </span>
               </div>
               <p className="text-xs text-cyan-300 font-medium mb-3">
@@ -701,7 +701,7 @@ export function LandingPage() {
           </div>
 
           <div className="pt-8 border-t border-[#1f2e48] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-            <p>RELIEF-OS &bull; National Disaster Response &amp; Resource Intelligence Platform &copy; 2026.</p>
+            <p>AAROH &bull; AI-Powered Disaster Response &amp; Resource Intelligence Platform &copy; 2026.</p>
             <p className="text-[11px] text-slate-500">
               Deterministic PostGIS Models &bull; Human-in-the-Loop Operational Safety
             </p>

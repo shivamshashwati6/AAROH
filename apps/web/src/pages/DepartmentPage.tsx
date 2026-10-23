@@ -438,7 +438,7 @@ export function DepartmentPage() {
                   UNASSIGNED UNIT
                 </span>
               )}
-              <span className="text-xs text-slate-500 font-mono">RELIEF-OS SECURE DISPATCH</span>
+              <span className="text-xs text-slate-500 font-mono">AAROH SECURE DISPATCH</span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
@@ -2039,7 +2039,7 @@ export function DepartmentPage() {
 
       {/* Footer */}
       <footer className="border-t border-[#1f2e48] bg-[#0d1522] px-6 py-4 text-center text-xs text-slate-500">
-        RELIEF-OS &copy; 2026 &bull; {getDepartmentLabel(department)} Operational Unit &bull; Inter-Agency Disaster Coordination.
+        AAROH &copy; 2026 &bull; {getDepartmentLabel(department)} Operational Unit &bull; Inter-Agency Disaster Coordination.
       </footer>
     </div>
   );

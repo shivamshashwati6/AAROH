@@ -29,7 +29,7 @@ function RootDispatcher() {
         <div className="flex items-center gap-3 bg-[#0d1522] border border-[#1f2e48] px-6 py-4 rounded-xl shadow-2xl">
           <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
           <span className="text-sm font-medium tracking-wide">
-            Initializing RELIEF-OS Session...
+            Initializing AAROH Session...
           </span>
         </div>
       </div>

@@ -104,7 +104,7 @@ export function AdminLoginPage() {
             </div>
             <h1 className="text-2xl font-black tracking-tight text-white">Admin Login</h1>
             <p className="text-xs text-amber-300 font-medium mt-0.5">
-              RELIEF-OS Governance &amp; Command Infrastructure
+              AAROH Governance &amp; Command Infrastructure
             </p>
             <p className="text-xs text-slate-400 mt-1">
               Restricted management console for authorized system administrators.
@@ -235,7 +235,7 @@ export function AdminLoginPage() {
 
       {/* Footer */}
       <footer className="border-t border-[#1f2e48] bg-[#0d1522] px-6 py-4 text-center text-xs text-slate-500">
-        RELIEF-OS &copy; 2026 &bull; Secure Authentication &amp; Role-Guarded Access Engine.
+        AAROH &copy; 2026 &bull; Secure Authentication &amp; Role-Guarded Access Engine.
       </footer>
     </div>
   );

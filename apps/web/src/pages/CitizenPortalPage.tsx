@@ -918,7 +918,7 @@ export function CitizenPortalPage() {
 
       {/* Footer */}
       <footer className="border-t border-[#1f2e48] bg-[#0d1522] px-6 py-4 text-center text-xs text-slate-500">
-        RELIEF-OS &copy; 2026 &bull; Public Emergency Response &amp; Citizen Safety Network.
+        AAROH &copy; 2026 &bull; Public Emergency Response &amp; Citizen Safety Network.
       </footer>
     </div>
   );

@@ -51,9 +51,10 @@ export function getPoolConfig(): PoolConfig {
     Boolean(isSupabase) ||
     Boolean(process.env.DATABASE_URL?.includes('sslmode=require'));
 
+  const isServerless = Boolean(process.env.VERCEL);
   const baseConfig: PoolConfig = {
-    max: 10,
-    idleTimeoutMillis: 30000,
+    max: isServerless ? 3 : 10,
+    idleTimeoutMillis: isServerless ? 10000 : 30000,
     connectionTimeoutMillis: 10000,
     keepAlive: true,
   };
@@ -101,7 +102,9 @@ export async function query<R extends QueryResultRow = any>(
   try {
     return await pool.query<R>(text, params);
   } catch (err: any) {
+    const isIdempotentRead = /^\s*SELECT\b/i.test(text);
     if (
+      isIdempotentRead &&
       err &&
       (err.code === 'ECONNRESET' ||
         err.code === '57P01' ||
@@ -110,7 +113,8 @@ export async function query<R extends QueryResultRow = any>(
         err.message?.includes('closed network connection') ||
         err.message?.includes('Connection terminated'))
     ) {
-      // Retry once on remote pooler connection reset / terminated connection
+      // Retry once ONLY for idempotent read-only queries (SELECT) on remote pooler connection reset.
+      // Non-idempotent mutations (INSERT/UPDATE/DELETE) are NEVER retried to avoid duplicate execution.
       return pool.query<R>(text, params);
     }
     throw err;

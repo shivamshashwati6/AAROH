@@ -85,7 +85,7 @@ export function LegacyDashboardPage() {
           ? `${err.message} (HTTP ${err.status})`
           : err instanceof Error
           ? err.message
-          : 'Unable to connect to RELIEF-OS API';
+          : 'Unable to connect to AAROH API';
       setError(`Backend Connection Error: ${message}. Make sure the API server is running on http://localhost:4000.`);
     } finally {
       setLoading(false);
@@ -178,7 +178,7 @@ export function LegacyDashboardPage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold tracking-wider text-lg text-white">RELIEF-OS</span>
+              <span className="font-bold tracking-wider text-lg text-white">AAROH</span>
               <span
                 className={`text-xs px-2 py-0.5 rounded font-mono border ${
                   error
@@ -250,7 +250,7 @@ export function LegacyDashboardPage() {
               "It doesn't just show where the disaster is. It decides what should happen next."
             </h1>
             <p className="text-sm text-slate-300 leading-relaxed">
-              RELIEF-OS transforms fragmented citizen reports, geospatial infrastructure, and inventory levels
+              AAROH transforms fragmented citizen reports, geospatial infrastructure, and inventory levels
               into prioritized, explainable response plans. It operates as an explainable decision-support engine
               strictly requiring authorized human officer approval before any field execution.
             </p>
@@ -262,7 +262,7 @@ export function LegacyDashboardPage() {
           <ShieldAlert className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
           <div>
             <span className="font-semibold text-blue-100">Human-In-The-Loop Decision Architecture: </span>
-            RELIEF-OS is designed as an operational decision-support tool. Autonomous AI execution is explicitly disabled.
+            AAROH is designed as an operational decision-support tool. Autonomous AI execution is explicitly disabled.
             Every generated response plan (allocations, routes, shelters) must be reviewed, modified if needed, and
             approved by an authorized emergency officer prior to dispatch.
           </div>
@@ -1042,7 +1042,7 @@ export function LegacyDashboardPage() {
 
       {/* 5. Footer */}
       <footer className="border-t border-[#1f2e48] bg-[#0d1522] px-6 py-4 text-center text-xs text-slate-500">
-        RELIEF-OS &copy; 2026 &bull; AI-Powered Disaster Response &amp; Resource Intelligence Platform.
+        AAROH &copy; 2026 &bull; AI-Powered Disaster Response &amp; Resource Intelligence Platform.
         PostgreSQL 17 + PostGIS 3.3.7 connected.
       </footer>
     </div>

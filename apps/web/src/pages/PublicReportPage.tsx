@@ -80,7 +80,7 @@ export function PublicReportPage() {
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950 text-amber-300 border border-amber-800">
               PUBLIC EMERGENCY DISPATCH
             </span>
-            <span className="text-xs text-slate-500">RELIEF-OS Fast Ingestion</span>
+            <span className="text-xs text-slate-500">AAROH Fast Ingestion</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
             Emergency Distress Ingestion Form
@@ -288,7 +288,7 @@ export function PublicReportPage() {
       </main>
 
       <footer className="border-t border-[#1f2e48] bg-[#0d1522] px-6 py-4 text-center text-xs text-slate-500">
-        RELIEF-OS &copy; 2026 &bull; Public Emergency Response Hotline.
+        AAROH &copy; 2026 &bull; Public Emergency Response Hotline.
       </footer>
     </div>
   );

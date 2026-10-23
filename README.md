@@ -1,7 +1,8 @@
-# RELIEF-OS
+# AAROH
 
-> **AI-Powered Disaster Response & Resource Intelligence Platform**  
-> *"It doesn't just show where the disaster is. It decides what should happen next."*
+> **AI-Powered Disaster Response & Resource Intelligence**  
+> *"Turning Disaster Data Into Actionable Intelligence."*  
+> *(Formerly code-named RELIEF-OS during early architecture prototyping)*
 
 ---
 
@@ -23,7 +24,7 @@ Traditional emergency dashboards only plot historical or observational data on a
 Turning fragmented data into coordinated action takes hours—and in a disaster, delay costs lives.
 
 ### 1.2 The Proposed Solution
-**RELIEF-OS** is a **Disaster Response Decision Engine**. It transforms raw, chaotic emergency inputs into prioritized, transparent, and actionable response plans:
+**AAROH** is an **AI-Powered Disaster Response & Resource Intelligence Platform**. It transforms raw, chaotic emergency inputs into prioritized, transparent, and actionable response plans:
 1. **Understands Distress Signals:** Normalizes incoming citizen distress reports into structured needs.
 2. **Computes Transparent Priorities:** Ranks affected zones using an explainable 0–100 **Relief Priority Score**.
 3. **Optimizes Resource Allocation:** Calculates precise resource deficits (food kits, potable water, medical units, rescue boats) and allocates available depot inventories without over-promising.
@@ -33,7 +34,7 @@ Turning fragmented data into coordinated action takes hours—and in a disaster,
 
 ### 1.3 Decision-Support System & Human-in-the-Loop Mandate
 > [!IMPORTANT]
-> **RELIEF-OS is strictly an operational decision-support system.**  
+> **AAROH is strictly an operational decision-support system.**  
 > It does **not** autonomously dispatch rescue teams, reallocate government stocks, or execute emergency orders without oversight. Every generated plan must be reviewed, optionally adjusted, and explicitly approved by an authorized emergency officer before response execution.
 
 ### 1.4 Intended Users & Personas

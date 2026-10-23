@@ -2,7 +2,7 @@
   "name": "relief-os-monorepo",
   "version": "0.1.0",
   "private": true,
-  "description": "RELIEF-OS - AI-Powered Disaster Response & Resource Intelligence Platform",
+  "description": "AAROH - AI-Powered Disaster Response & Resource Intelligence",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -22,6 +22,15 @@
     "db:seed:admin": "node database/scripts/seed-admin.js",
     "db:seed:users": "node database/scripts/seed-demo-users.js",
     "db:verify": "node database/scripts/verify.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.11.5",
+    "zod": "^3.23.8"
   },
   "keywords": [
     "disaster-response",
