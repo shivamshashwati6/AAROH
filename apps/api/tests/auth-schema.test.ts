@@ -1,14 +1,26 @@
-import { describe, it, after, afterEach } from 'node:test';
+import { describe, it, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { query, closePool } from '../src/db';
 import { User, UserRole, DepartmentType, AuthResponse } from '@relief-os/shared';
 
+const testSchemaUserIds = [
+  'test-user-cit', 'test-user-cmd',
+  'test-user-health', 'test-user-supply', 'test-user-rescue',
+  'test-user-admin', 'test-user-officer', 'test-user-coordinator', 'test-user-team_lead',
+  'test-user-inv', 'test-user-dept-null', 'test-user-dept-inv', 'test-user-cit-dept'
+];
+
 describe('RELIEF-OS Auth Step 1: Database Schema & Shared Types', () => {
+  before(async () => {
+    await query("DELETE FROM users WHERE id = ANY($1::varchar[])", [testSchemaUserIds]);
+  });
+
   afterEach(async () => {
-    await query("DELETE FROM users WHERE id LIKE 'test-user-%'");
+    await query("DELETE FROM users WHERE id = ANY($1::varchar[])", [testSchemaUserIds]);
   });
 
   after(async () => {
+    await query("DELETE FROM users WHERE id = ANY($1::varchar[])", [testSchemaUserIds]);
     await closePool();
   });
 

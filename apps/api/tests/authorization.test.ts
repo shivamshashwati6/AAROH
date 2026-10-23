@@ -64,15 +64,26 @@ before(async () => {
   citizenToken = generateAccessToken({ id: 'usr-authz-citizen', name: 'Authz Citizen', email: 'citizen@test-authz.org', role: 'citizen' }).token;
 });
 
+const createdDisasterIds: string[] = [];
+const createdReportIds: string[] = [];
+const authzUserIds = [
+  'usr-authz-admin', 'usr-authz-cmd', 'usr-authz-officer',
+  'usr-authz-coord', 'usr-authz-lead', 'usr-authz-health',
+  'usr-authz-supply', 'usr-authz-rescue', 'usr-authz-citizen'
+];
+
 after(async () => {
   // CRITICAL FOREIGN KEY CLEANUP:
   // Reset any recommendation approved_by references before deleting users
   await query("UPDATE recommendations SET approved_by = NULL, status = 'draft' WHERE id = 'rec-zone-a-001'");
-  await query("DELETE FROM recommendations WHERE id LIKE 'rec-test-%'");
-  await query("DELETE FROM reports WHERE id LIKE 'rep-test-%'");
-  await query("DELETE FROM disasters WHERE id LIKE 'disaster-test-%'");
-  await query("DELETE FROM audit_log WHERE user_id LIKE 'usr-authz-%'");
-  await query("DELETE FROM users WHERE id LIKE 'usr-authz-%'");
+  if (createdReportIds.length > 0) {
+    await query(`DELETE FROM reports WHERE id = ANY($1::varchar[])`, [createdReportIds]);
+  }
+  if (createdDisasterIds.length > 0) {
+    await query(`DELETE FROM disasters WHERE id = ANY($1::varchar[])`, [createdDisasterIds]);
+  }
+  await query(`DELETE FROM audit_log WHERE user_id = ANY($1::varchar[])`, [authzUserIds]);
+  await query(`DELETE FROM users WHERE id = ANY($1::varchar[])`, [authzUserIds]);
 
   // Revert route-b if modified
   await query("UPDATE road_segments SET status = 'partial' WHERE id = 'route-b'");
@@ -268,6 +279,7 @@ describe('RELIEF-OS Step 3: Backend Role-Based Authorization & API Security Test
       assert.equal(res.status, 201);
       const body = await res.json();
       assert.ok(body.id);
+      createdDisasterIds.push(body.id);
       assert.equal(body.name, payload.name);
 
       // Verify audit log
@@ -288,6 +300,9 @@ describe('RELIEF-OS Step 3: Backend Role-Based Authorization & API Security Test
         body: JSON.stringify({ ...payload, name: 'Officer Created Flood' }),
       });
       assert.equal(res.status, 201);
+      const body = await res.json();
+      assert.ok(body.id);
+      createdDisasterIds.push(body.id);
     });
   });
 
@@ -356,6 +371,7 @@ describe('RELIEF-OS Step 3: Backend Role-Based Authorization & API Security Test
       const body = await res.json();
       assert.equal(body.success, true);
       assert.equal(body.inserted_count, 1);
+      createdReportIds.push(...body.report_ids);
 
       // Verify audit log
       const auditRes = await query<{ action: string }>(
@@ -393,6 +409,7 @@ describe('RELIEF-OS Step 3: Backend Role-Based Authorization & API Security Test
       const body = await res.json();
       assert.ok(body.id);
       createdReportId = body.id;
+      createdReportIds.push(createdReportId);
       // The submitter receives confirmation with the submitted payload
       assert.equal(body.contact_number, testContact);
     });

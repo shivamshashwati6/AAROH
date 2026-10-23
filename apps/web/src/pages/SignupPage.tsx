@@ -30,15 +30,17 @@ export function SignupPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // If already authenticated, redirect to home route
+  // If already authenticated and not loading, redirect to home route
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (!isLoading && isAuthenticated && user) {
       navigate(getHomeRouteForUser(user), { replace: true });
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isLoading, isAuthenticated, user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting || isLoading) return;
+
     setFormError(null);
     clearError();
 
@@ -50,8 +52,9 @@ export function SignupPage() {
       return;
     }
 
-    if (!trimmedEmail) {
-      setFormError('Please provide a valid email address.');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setFormError('Please provide a valid email address (e.g. name@example.com).');
       return;
     }
 
@@ -69,8 +72,9 @@ export function SignupPage() {
     try {
       const newUser = await registerCitizen(trimmedName, trimmedEmail, password);
       navigate(getHomeRouteForUser(newUser), { replace: true });
-    } catch {
-      // Handled in auth context
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Registration failed. Please try again.';
+      setFormError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -280,11 +284,17 @@ export function SignupPage() {
           </form>
 
           {/* Already have an account link */}
-          <div className="mt-6 pt-5 border-t border-[#1f2e48] text-center">
+          <div className="mt-6 pt-5 border-t border-[#1f2e48] text-center space-y-1.5">
             <p className="text-xs text-slate-400">
               Already have an account?{' '}
-              <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-semibold underline">
-                Sign in
+              <Link to="/citizen/login" className="text-cyan-400 hover:text-cyan-300 font-semibold underline">
+                Sign in to Citizen Portal
+              </Link>
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Department or Admin user?{' '}
+              <Link to="/login" className="text-slate-400 hover:text-slate-300 underline">
+                Select another portal
               </Link>
             </p>
           </div>

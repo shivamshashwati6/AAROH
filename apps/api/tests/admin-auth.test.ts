@@ -56,8 +56,17 @@ before(async () => {
   );
 });
 
+const createdSimIds: string[] = [];
+const createdDisasterIds: string[] = [];
+
 after(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  if (createdSimIds.length > 0) {
+    await query(`DELETE FROM simulation_runs WHERE id = ANY($1::varchar[])`, [createdSimIds]);
+  }
+  if (createdDisasterIds.length > 0) {
+    await query(`DELETE FROM disasters WHERE id = ANY($1::varchar[])`, [createdDisasterIds]);
+  }
   await query("DELETE FROM users WHERE id IN ('usr-admin-integration-test', 'usr-cit-integration-test')");
   await query("DELETE FROM audit_log WHERE user_id = $1", [TEST_ADMIN_ID]);
   await closePool();
@@ -161,6 +170,7 @@ describe('RELIEF-OS Admin Account Authentication & Authorization Tests', () => {
       assert.equal(res.status, 200);
       const data = await res.json();
       assert.equal(data.is_simulated, true);
+      if (data.simulation_id) createdSimIds.push(data.simulation_id);
     });
 
     it('should allow admin to create emergency disasters', async () => {
@@ -182,6 +192,8 @@ describe('RELIEF-OS Admin Account Authentication & Authorization Tests', () => {
       assert.equal(res.status, 201);
       const data = await res.json();
       assert.equal(data.name, 'Admin Test Flash Flood 2026');
+      assert.ok(data.id);
+      createdDisasterIds.push(data.id);
 
       // Cleanup created disaster
       await query('DELETE FROM disasters WHERE id = $1', [data.id]);

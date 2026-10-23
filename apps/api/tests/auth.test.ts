@@ -27,9 +27,14 @@ before(async () => {
   });
 });
 
+const createdUserIds: string[] = [];
+
 after(async () => {
-  // Clean up any test users created during the run
-  await query("DELETE FROM users WHERE email LIKE '%@test-auth.org'");
+  // Clean up any test users created during the run using exact IDs and exact test email
+  if (createdUserIds.length > 0) {
+    await query("DELETE FROM users WHERE id = ANY($1::varchar[])", [createdUserIds]);
+  }
+  await query("DELETE FROM users WHERE email = $1", ['ratul.barman@test-auth.org']);
   await new Promise<void>((resolve) => {
     server.close(() => resolve());
   });
@@ -159,6 +164,8 @@ describe('RELIEF-OS Step 2: Backend Authentication Service', () => {
 
       assert.equal(res.status, 201);
       const body = await res.json();
+      assert.ok(body.user?.id);
+      createdUserIds.push(body.user.id);
 
       assert.ok(body.token);
       assert.ok(body.expires_at);

@@ -3,6 +3,9 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
+import { CitizenLoginPage } from './pages/CitizenLoginPage';
+import { DepartmentLoginPage } from './pages/DepartmentLoginPage';
+import { AdminLoginPage } from './pages/AdminLoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { CitizenPortalPage } from './pages/CitizenPortalPage';
 import { CommandCenterPage } from './pages/CommandCenterPage';
@@ -45,10 +48,14 @@ export function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Public Access Routes */}
+          {/* Public Access & Distinct Role Authentication Routes */}
           <Route path="/" element={<RootDispatcher />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/citizen/login" element={<CitizenLoginPage />} />
+          <Route path="/department/login" element={<DepartmentLoginPage />} />
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/citizen/signup" element={<SignupPage />} />
+          <Route path="/signup" element={<Navigate to="/citizen/signup" replace />} />
           <Route path="/report" element={<PublicReportPage />} />
 
           {/* Preserved Full Operational Map & AI Simulation Dashboard */}

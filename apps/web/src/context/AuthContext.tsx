@@ -21,8 +21,12 @@ export interface AuthContextType {
   isCitizen: boolean;
   isAdmin: boolean;
   isCommandCenter: boolean;
-  isDepartment: boolean;
-  login: (email: string, password: string) => Promise<User>;
+  login: (
+    email: string,
+    password: string,
+    portal?: 'citizen' | 'department' | 'admin' | 'command_center',
+    expectedRole?: string
+  ) => Promise<User>;
   registerCitizen: (name: string, email: string, password: string) => Promise<User>;
   logout: () => void;
   clearError: () => void;
@@ -109,11 +113,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [logout]);
 
   const login = useCallback(
-    async (email: string, password: string): Promise<User> => {
+    async (
+      email: string,
+      password: string,
+      portal?: 'citizen' | 'department' | 'admin' | 'command_center',
+      expectedRole?: string
+    ): Promise<User> => {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await api.login({ email, password });
+        const res = await api.login({ email, password, portal, expectedRole });
         setUser(res.user);
         setToken(res.token ?? null);
         return res.user;

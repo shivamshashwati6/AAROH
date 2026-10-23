@@ -13,12 +13,14 @@ const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters in length').max(128),
   role: z.string().optional(),
-  department: z.string().optional(),
+  department: z.string().nullable().optional(),
 });
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
+  portal: z.enum(['citizen', 'department', 'admin', 'command_center']).optional(),
+  expectedRole: z.string().optional(),
 });
 
 // -----------------------------------------------------------------------------
@@ -27,8 +29,9 @@ const loginSchema = z.object({
 authRouter.post('/register', async (req: Request, res: Response) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
+    const firstErrorMessage = parsed.error.issues[0]?.message || 'Invalid registration input';
     return res.status(400).json({
-      error: 'Invalid registration input',
+      error: firstErrorMessage,
       details: parsed.error.issues,
     });
   }
@@ -36,7 +39,7 @@ authRouter.post('/register', async (req: Request, res: Response) => {
   const { name, email, password, role, department } = parsed.data;
 
   // Enforce role privilege security: public registration is strictly for CITIZEN accounts
-  if ((role && role !== 'citizen') || department) {
+  if ((role && role !== 'citizen') || (department && department !== null)) {
     return res.status(403).json({
       error: 'Public registration is restricted to citizen accounts only. Privileged roles require administrative provisioning.',
     });
@@ -108,7 +111,8 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     });
   }
 
-  const { email, password } = parsed.data;
+  const { email, password, portal, expectedRole } = parsed.data;
+  const targetPortal = portal || (expectedRole as 'citizen' | 'department' | 'admin' | 'command_center' | undefined);
 
   try {
     const userRes = await query<{
@@ -135,6 +139,39 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     const passwordValid = await verifyPassword(password, row.password_hash);
     if (!passwordValid) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Role-based portal authorization validation
+    if (targetPortal) {
+      if (targetPortal === 'citizen' && row.role !== 'citizen') {
+        return res.status(401).json({
+          error: 'Invalid credentials for Citizen portal access',
+        });
+      }
+
+      if (
+        targetPortal === 'department' &&
+        !['department', 'coordinator', 'team_lead'].includes(row.role)
+      ) {
+        return res.status(401).json({
+          error: 'Invalid credentials for Department portal access',
+        });
+      }
+
+      if (targetPortal === 'admin' && row.role !== 'admin') {
+        return res.status(401).json({
+          error: 'Invalid credentials for Admin portal access',
+        });
+      }
+
+      if (
+        targetPortal === 'command_center' &&
+        !['command_center', 'admin', 'officer'].includes(row.role)
+      ) {
+        return res.status(401).json({
+          error: 'Invalid credentials for Command Center portal access',
+        });
+      }
     }
 
     const user: User = {

@@ -23,8 +23,25 @@ const testUsers = [
   { id: 'usr-life-citizen', name: 'Lifecycle Citizen', email: 'citizen@test-lifecycle.org', role: 'citizen', dept: null },
 ];
 
+const lifecycleUserIds = testUsers.map((u) => u.id);
+const knownTestPlanIds = [
+  'rec-test-lifecycle-001',
+  'rec-test-invalid-001',
+  'rec-test-mod-001',
+  'rec-test-shortage-001',
+  'rec-test-idem-001',
+  'rec-test-fail-ret-001',
+  'rec-test-fail-lost-001',
+  'rec-test-sec-001',
+];
+const dynamicTestPlanIds: string[] = [];
+const dynamicSimIds: string[] = [];
+
 async function resetStockAndAllocations() {
-  await query(`DELETE FROM allocations WHERE plan_id LIKE 'rec-test-%' OR plan_id LIKE 'rec-sim-%' OR plan_id LIKE 'rec-realloc-%'`);
+  const allPlanIds = [...knownTestPlanIds, ...dynamicTestPlanIds];
+  if (allPlanIds.length > 0) {
+    await query(`DELETE FROM allocations WHERE plan_id = ANY($1::varchar[])`, [allPlanIds]);
+  }
   await query(`UPDATE resources SET quantity = 2500 WHERE center_id = 'center-3' AND resource_type = 'food_kits'`);
   await query(`UPDATE resources SET quantity = 2000 WHERE center_id = 'center-3' AND resource_type = 'water_units'`);
   await query(`UPDATE resources SET quantity = 4 WHERE center_id = 'center-3' AND resource_type = 'boats'`);
@@ -57,16 +74,22 @@ before(async () => {
   citizenToken = generateAccessToken({ id: 'usr-life-citizen', name: 'Lifecycle Citizen', email: 'citizen@test-lifecycle.org', role: 'citizen' }).token;
 
   // Clean slate before test execution
-  await query(`DELETE FROM recommendations WHERE id LIKE 'rec-test-%' OR id LIKE 'rec-sim-%' OR id LIKE 'rec-realloc-%'`);
-  await query(`DELETE FROM audit_log WHERE user_id LIKE 'usr-life-%'`);
+  await query(`DELETE FROM recommendations WHERE id = ANY($1::varchar[])`, [knownTestPlanIds]);
+  await query(`DELETE FROM audit_log WHERE user_id = ANY($1::varchar[])`, [lifecycleUserIds]);
   await resetStockAndAllocations();
 });
 
 after(async () => {
-  // Clean up any test recommendations and allocations created
-  await query(`DELETE FROM recommendations WHERE id LIKE 'rec-test-%' OR id LIKE 'rec-sim-%' OR id LIKE 'rec-realloc-%'`);
-  await query(`DELETE FROM audit_log WHERE user_id LIKE 'usr-life-%'`);
-  await query(`DELETE FROM users WHERE id LIKE 'usr-life-%'`);
+  // Clean up exact test recommendations and allocations created
+  const allPlanIds = [...knownTestPlanIds, ...dynamicTestPlanIds];
+  if (allPlanIds.length > 0) {
+    await query(`DELETE FROM recommendations WHERE id = ANY($1::varchar[])`, [allPlanIds]);
+  }
+  if (dynamicSimIds.length > 0) {
+    await query(`DELETE FROM simulation_runs WHERE id = ANY($1::varchar[])`, [dynamicSimIds]);
+  }
+  await query(`DELETE FROM audit_log WHERE user_id = ANY($1::varchar[])`, [lifecycleUserIds]);
+  await query(`DELETE FROM users WHERE id = ANY($1::varchar[])`, [lifecycleUserIds]);
   await resetStockAndAllocations();
 
   if (server) {
@@ -579,6 +602,7 @@ describe('RELIEF-OS Phase 2: Response Plan Lifecycle & Safe Inventory Execution'
       assert.equal(data.success, true);
       assert.equal(data.plan.status, 'draft');
       assert.ok(data.plan.id);
+      dynamicTestPlanIds.push(data.plan.id);
 
       // Verify audit log has PLAN_REALLOCATED_DRAFT
       const audit = await query(
@@ -612,6 +636,7 @@ describe('RELIEF-OS Phase 2: Response Plan Lifecycle & Safe Inventory Execution'
       const simData = await simRes.json();
       const simId = simData.simulation_id;
       assert.ok(simId);
+      dynamicSimIds.push(simId);
 
       // Capture stock before promotion
       const stockBefore = await query(`SELECT SUM(quantity) as total FROM resources`);
@@ -632,6 +657,7 @@ describe('RELIEF-OS Phase 2: Response Plan Lifecycle & Safe Inventory Execution'
       assert.equal(promoData.success, true);
       assert.equal(promoData.recommendation.status, 'draft');
       assert.equal(promoData.recommendation.source_simulation_id, simId);
+      dynamicTestPlanIds.push(promoData.recommendation.id);
 
       // 3. Verify zero operational stock or fleet mutation
       const stockAfter = await query(`SELECT SUM(quantity) as total FROM resources`);

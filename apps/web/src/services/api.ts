@@ -209,14 +209,21 @@ export const api = {
     api.setToken(null);
   },
 
-  /** Authenticate user with credentials */
-  async login(payload: { email: string; password: string }): Promise<AuthResponse> {
+  /** Authenticate user with credentials, with optional role/portal verification */
+  async login(payload: {
+    email: string;
+    password: string;
+    portal?: 'citizen' | 'department' | 'admin' | 'command_center';
+    expectedRole?: string;
+  }): Promise<AuthResponse> {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: payload.email.trim().toLowerCase(),
         password: payload.password,
+        ...(payload.portal ? { portal: payload.portal } : {}),
+        ...(payload.expectedRole ? { expectedRole: payload.expectedRole } : {}),
       }),
     });
     const data = await handleResponse<AuthResponse>(res);

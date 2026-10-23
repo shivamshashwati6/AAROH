@@ -9,6 +9,7 @@ import { generateAccessToken } from '../src/services/auth';
 let server: Server;
 let baseUrl: string;
 let authHeader: Record<string, string>;
+const testReportIds: string[] = [];
 
 before(async () => {
   await new Promise<void>((resolve) => {
@@ -36,6 +37,12 @@ before(async () => {
 });
 
 after(async () => {
+  // Clean up exact reports created during this test run
+  if (testReportIds.length > 0) {
+    await query(`DELETE FROM reports WHERE id = ANY($1::varchar[])`, [testReportIds]);
+  }
+  // Revert route-b to canonical state in case of test failure
+  await query("UPDATE road_segments SET status = 'partial' WHERE id = 'route-b'");
   await query("DELETE FROM users WHERE id = 'usr-test-officer-reg'");
   await new Promise<void>((resolve) => {
     server.close(() => resolve());
@@ -682,6 +689,7 @@ describe('RELIEF-OS Phase 2 Backend API Integration Tests', () => {
       const body = await res.json();
       assert.ok(body.id);
       createdReportId = body.id;
+      testReportIds.push(createdReportId);
       assert.equal(body.severity, 'critical');
       assert.equal(body.medical_need, true);
       assert.equal(body.is_simulated, true);
@@ -757,6 +765,7 @@ describe('RELIEF-OS Phase 2 Backend API Integration Tests', () => {
       assert.equal(body.success, true);
       assert.equal(body.inserted_count, 2);
       assert.equal(body.report_ids.length, 2);
+      testReportIds.push(...body.report_ids);
     });
 
     it('should list reports with filters and pagination', async () => {

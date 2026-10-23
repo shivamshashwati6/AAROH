@@ -97,10 +97,14 @@ before(async () => {
   citizenToken = (await cLogin.json()).token;
 });
 
+const provisionedUserIds: string[] = [];
+
 after(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  if (provisionedUserIds.length > 0) {
+    await query("DELETE FROM users WHERE id = ANY($1::varchar[])", [provisionedUserIds]);
+  }
   await query("DELETE FROM users WHERE id IN ($1, $2, $3)", [ADMIN_ID, HEALTH_ID, CITIZEN_ID]);
-  await query("DELETE FROM users WHERE email LIKE '%prov-test%'");
   await query("DELETE FROM audit_log WHERE user_id = $1", [ADMIN_ID]);
   await closePool();
 });
@@ -289,6 +293,7 @@ describe('PHASE 2 & 3: Admin & Department Report Access Regression Tests', () =>
       assert.equal(res.status, 201);
       const data = await res.json();
       assert.ok(data.user.id);
+      provisionedUserIds.push(data.user.id);
       assert.equal(data.user.email, testEmail);
       assert.equal(data.user.role, 'department');
       assert.equal(data.user.department, 'rescue');

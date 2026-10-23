@@ -63,11 +63,13 @@ before(async () => {
   }).token;
 });
 
+const simUserIds = ['usr-sim-off', 'usr-sim-cmd', 'usr-sim-adm', 'usr-sim-cit'];
+
 after(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  await query("DELETE FROM simulation_runs WHERE user_id LIKE 'usr-sim-%'");
-  await query("DELETE FROM audit_log WHERE user_id LIKE 'usr-sim-%'");
-  await query("DELETE FROM users WHERE id LIKE 'usr-sim-%'");
+  await query("DELETE FROM simulation_runs WHERE user_id = ANY($1::varchar[])", [simUserIds]);
+  await query("DELETE FROM audit_log WHERE user_id = ANY($1::varchar[])", [simUserIds]);
+  await query("DELETE FROM users WHERE id = ANY($1::varchar[])", [simUserIds]);
   await closePool();
 });
 

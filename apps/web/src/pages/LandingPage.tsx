@@ -507,14 +507,14 @@ export function LandingPage() {
             </div>
             <div className="space-y-2 mt-4">
               <Link
-                to="/signup"
+                to="/citizen/signup"
                 className="w-full block text-center text-xs font-semibold py-2.5 rounded-lg border border-[#1f2e48] hover:border-cyan-500 text-slate-300 hover:text-white transition"
               >
                 Sign Up as Citizen
               </Link>
               <p className="text-center text-xs text-slate-400">
                 Already have an account?{' '}
-                <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-semibold underline">
+                <Link to="/citizen/login" className="text-cyan-400 hover:text-cyan-300 font-semibold underline">
                   Sign in
                 </Link>
               </p>
@@ -591,7 +591,7 @@ export function LandingPage() {
               </ul>
             </div>
             <Link
-              to="/login"
+              to="/department/login"
               className="w-full text-center text-xs font-semibold py-2.5 rounded-lg border border-[#1f2e48] hover:border-indigo-500 text-slate-300 hover:text-white transition"
             >
               Sign In to Department

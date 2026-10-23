@@ -37,9 +37,21 @@ export function ProtectedRoute({
     );
   }
 
-  // 2. Unauthenticated check
+  // 2. Unauthenticated check - route to the appropriate role login page
   if (!isAuthenticated || !user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    let targetLogin = '/login';
+    const path = location.pathname;
+    if (path.startsWith('/citizen') || (allowedRoles?.length === 1 && allowedRoles[0] === 'citizen')) {
+      targetLogin = '/citizen/login';
+    } else if (
+      path.startsWith('/department') ||
+      (allowedRoles?.includes('department') && !allowedRoles?.includes('citizen') && !allowedRoles?.includes('command_center'))
+    ) {
+      targetLogin = '/department/login';
+    } else if (path.startsWith('/admin') || (allowedRoles?.length === 1 && allowedRoles[0] === 'admin')) {
+      targetLogin = '/admin/login';
+    }
+    return <Navigate to={targetLogin} state={{ from: location }} replace />;
   }
 
   // 3. Role authorization check

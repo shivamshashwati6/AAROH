@@ -121,7 +121,7 @@ export function NavigationHeader() {
                 Sign In
               </Link>
               <Link
-                to="/signup"
+                to="/citizen/signup"
                 className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-md transition"
               >
                 Register
