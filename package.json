@@ -20,6 +20,7 @@
     "db:migrate": "node database/scripts/migrate.js",
     "db:seed": "node database/scripts/seed.js",
     "db:seed:admin": "node database/scripts/seed-admin.js",
+    "db:seed:users": "node database/scripts/seed-demo-users.js",
     "db:verify": "node database/scripts/verify.js"
   },
   "keywords": [
