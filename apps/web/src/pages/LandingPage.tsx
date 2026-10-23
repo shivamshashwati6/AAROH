@@ -216,7 +216,7 @@ export function LandingPage() {
               to="/login"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-sm shadow-xl shadow-cyan-950/60 transition group cursor-pointer"
             >
-              <span>Sign In to Workspace</span>
+              <span>Sign In</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition" />
             </Link>
 
@@ -505,12 +505,20 @@ export function LandingPage() {
                 </li>
               </ul>
             </div>
-            <Link
-              to="/signup"
-              className="w-full text-center text-xs font-semibold py-2.5 rounded-lg border border-[#1f2e48] hover:border-cyan-500 text-slate-300 hover:text-white transition"
-            >
-              Sign Up as Citizen
-            </Link>
+            <div className="space-y-2 mt-4">
+              <Link
+                to="/signup"
+                className="w-full block text-center text-xs font-semibold py-2.5 rounded-lg border border-[#1f2e48] hover:border-cyan-500 text-slate-300 hover:text-white transition"
+              >
+                Sign Up as Citizen
+              </Link>
+              <p className="text-center text-xs text-slate-400">
+                Already have an account?{' '}
+                <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-semibold underline">
+                  Sign in
+                </Link>
+              </p>
+            </div>
           </div>
 
           {/* Workspace 2: Command Center */}
@@ -675,7 +683,7 @@ export function LandingPage() {
               <ul className="text-xs space-y-2 text-slate-400">
                 <li>
                   <Link to="/login" className="hover:text-cyan-400 transition">
-                    Sign In to Workspace
+                    Sign In
                   </Link>
                 </li>
                 <li>

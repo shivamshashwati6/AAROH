@@ -36,11 +36,24 @@ import {
   Sliders,
   Sparkles,
   RotateCcw,
+  Check,
+  Edit3,
+  PackageCheck,
+  RotateCw,
 } from 'lucide-react';
 
 export function CommandCenterPage() {
   const { user } = useAuth();
   const [, startTransition] = useTransition();
+
+  // Role Permissions
+  const canManagePlans = user?.role === 'command_center' || user?.role === 'admin' || user?.role === 'officer';
+  const canExecuteDelivery =
+    canManagePlans ||
+    user?.role === 'department' ||
+    user?.department === 'health' ||
+    user?.department === 'supply' ||
+    user?.department === 'rescue';
 
   // Core Data States
   const [loading, setLoading] = useState<boolean>(true);
@@ -71,6 +84,30 @@ export function CommandCenterPage() {
   const [showRejectModal, setShowRejectModal] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>('');
   const [approvalNotes, setApprovalNotes] = useState<string>('');
+
+  // Plan Lifecycle Modals & Action States
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [editQuantities, setEditQuantities] = useState<{
+    boats: number;
+    food_kits: number;
+    water_units: number;
+    medical_teams: number;
+  }>({ boats: 0, food_kits: 0, water_units: 0, medical_teams: 0 });
+  const [editCenterId, setEditCenterId] = useState<string>('');
+  const [editReason, setEditReason] = useState<string>('');
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const [showDispatchModal, setShowDispatchModal] = useState<boolean>(false);
+  const [dispatchNotes, setDispatchNotes] = useState<string>('');
+  const [dispatchError, setDispatchError] = useState<string | null>(null);
+
+  const [showFailModal, setShowFailModal] = useState<boolean>(false);
+  const [failReason, setFailReason] = useState<string>('');
+  const [failDisposition, setFailDisposition] = useState<'stock_lost' | 'stock_returned'>('stock_returned');
+  const [failError, setFailError] = useState<string | null>(null);
+
+  const [deliveryNotes, setDeliveryNotes] = useState<string>('');
+  const [promoteLoading, setPromoteLoading] = useState<boolean>(false);
 
   // What-If Simulation State (PRD Module 9)
   const [simScenarioType, setSimScenarioType] = useState<
@@ -203,6 +240,190 @@ export function CommandCenterPage() {
       setActionFeedback({ type: 'error', message: msg });
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // Open Edit Modal with current plan allocations
+  const handleOpenEditModal = () => {
+    if (!activePlan) return;
+    const planRec = activePlan.plan?.resources_recommended || {};
+    setEditQuantities({
+      boats: planRec.boats ?? 0,
+      food_kits: planRec.food_kits ?? 0,
+      water_units: planRec.water_units ?? 0,
+      medical_teams: planRec.medical_teams ?? 0,
+    });
+    setEditCenterId(activePlan.plan?.source_center_id || centers[0]?.id || '');
+    setEditReason('');
+    setEditError(null);
+    setShowEditModal(true);
+  };
+
+  // Save Modified Plan before Approval
+  const handleSavePlanEdit = async () => {
+    if (!activePlan) return;
+    if (!editReason.trim()) {
+      setEditError('A modification reason is required for the audit registry.');
+      return;
+    }
+    if (
+      editQuantities.boats < 0 ||
+      editQuantities.food_kits < 0 ||
+      editQuantities.water_units < 0 ||
+      editQuantities.medical_teams < 0
+    ) {
+      setEditError('Resource quantities cannot be negative.');
+      return;
+    }
+
+    setActionLoading(true);
+    setEditError(null);
+    try {
+      await api.modifyPlan(activePlan.id, {
+        supplying_center_id: editCenterId,
+        resources: editQuantities,
+        reason: editReason.trim(),
+      });
+      setActionFeedback({
+        type: 'success',
+        message: `Plan #${activePlan.id} modified successfully. Changes logged to audit log. Status updated to MODIFIED.`,
+      });
+      setShowEditModal(false);
+      await loadZoneDecisionData(selectedZoneId, planningDays);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : 'Plan modification failed.';
+      setEditError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Open Dispatch Modal
+  const handleOpenDispatchModal = () => {
+    if (!activePlan) return;
+    setDispatchNotes('');
+    setDispatchError(null);
+    setShowDispatchModal(true);
+  };
+
+  // Execute / Dispatch Approved Plan (Atomic Inventory Deduction)
+  const handleDispatchPlan = async () => {
+    if (!activePlan) return;
+    setActionLoading(true);
+    setDispatchError(null);
+    try {
+      await api.dispatchPlan(activePlan.id, {
+        execution_notes: dispatchNotes.trim() || undefined,
+      });
+      setActionFeedback({
+        type: 'success',
+        message: `Plan #${activePlan.id} dispatched! Inventory deducted in atomic transaction. Status is now IN TRANSIT.`,
+      });
+      setShowDispatchModal(false);
+      setDispatchNotes('');
+      await loadZoneDecisionData(selectedZoneId, planningDays);
+      const centersRes = await api.getResourceCenters();
+      setCenters(centersRes.items);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : 'Dispatch failed.';
+      setDispatchError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Confirm Delivery Complete
+  const handleDeliverPlan = async () => {
+    if (!activePlan) return;
+    setActionLoading(true);
+    setActionFeedback(null);
+    try {
+      await api.deliverPlan(activePlan.id, deliveryNotes.trim() || undefined);
+      setActionFeedback({
+        type: 'success',
+        message: `Plan #${activePlan.id} marked as DELIVERED. Transport mission successfully completed.`,
+      });
+      setDeliveryNotes('');
+      await loadZoneDecisionData(selectedZoneId, planningDays);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to mark plan as delivered.';
+      setActionFeedback({ type: 'error', message: msg });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Report Transport Failure
+  const handleFailPlan = async () => {
+    if (!activePlan) return;
+    if (!failReason.trim()) {
+      setFailError('A failure reason is required.');
+      return;
+    }
+    setActionLoading(true);
+    setFailError(null);
+    try {
+      await api.failPlan(activePlan.id, {
+        failure_reason: failReason.trim(),
+        disposition: failDisposition,
+      });
+      setActionFeedback({
+        type: 'success',
+        message: `Plan #${activePlan.id} marked as FAILED. Disposition: ${failDisposition}. Reallocation workflow enabled.`,
+      });
+      setShowFailModal(false);
+      setFailReason('');
+      await loadZoneDecisionData(selectedZoneId, planningDays);
+      const centersRes = await api.getResourceCenters();
+      setCenters(centersRes.items);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to update plan status.';
+      setFailError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Reallocate Replacement Plan
+  const handleReallocatePlan = async () => {
+    if (!activePlan) return;
+    setActionLoading(true);
+    setActionFeedback(null);
+    try {
+      const res = await api.reallocatePlan(activePlan.id, {
+        planning_days: planningDays,
+        notes: 'Reallocated after transport disruption',
+      });
+      setActionFeedback({
+        type: 'success',
+        message: `Replacement response plan #${res.plan.id} drafted against live stock! Status: DRAFT.`,
+      });
+      await loadZoneDecisionData(selectedZoneId, planningDays);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : 'Reallocation failed.';
+      setActionFeedback({ type: 'error', message: msg });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Promote Simulation to Draft Plan
+  const handlePromoteSimulation = async () => {
+    if (!simResult?.simulation_id) return;
+    setPromoteLoading(true);
+    setActionFeedback(null);
+    try {
+      const res = await api.promoteSimulationToDraft(simResult.simulation_id);
+      setActionFeedback({
+        type: 'success',
+        message: `Simulation #${simResult.simulation_id} promoted to DRAFT response plan #${res.recommendation.id}! No operational stock mutated.`,
+      });
+      await loadZoneDecisionData(selectedZoneId, planningDays);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : 'Simulation promotion failed.';
+      setActionFeedback({ type: 'error', message: msg });
+    } finally {
+      setPromoteLoading(false);
     }
   };
 
@@ -694,29 +915,37 @@ export function CommandCenterPage() {
                 </div>
               )}
 
-              {/* 3. Human-in-the-Loop Plan Approval Card (Section 6) */}
-              <div className="pt-4 border-t border-[#1f2e48] space-y-3">
-                <div className="flex items-center justify-between">
+              {/* 3. Human-in-the-Loop Response Plan Lifecycle (PRD Phase 2) */}
+              <div className="pt-4 border-t border-[#1f2e48] space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <h4 className="font-bold text-sm text-white flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-emerald-400" />
-                      <span>Official Response Plan Decision</span>
+                      <span>Response Plan Lifecycle</span>
                     </h4>
                     <p className="text-xs text-slate-400">
-                      Human officer authorization required prior to inter-department dispatch.
+                      Review, edit allocations, authorize, and safely execute inventory dispatch.
                     </p>
                   </div>
                   {activePlan ? (
                     <span
-                      className={`px-2.5 py-0.5 rounded text-[11px] font-bold uppercase ${
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
                         activePlan.status === 'approved'
-                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                          : activePlan.status === 'in_transit'
+                          ? 'bg-cyan-950 text-cyan-300 border border-cyan-500 animate-pulse'
+                          : activePlan.status === 'delivered'
+                          ? 'bg-emerald-950 text-emerald-200 border border-emerald-500'
+                          : activePlan.status === 'failed'
+                          ? 'bg-red-950 text-red-300 border border-red-700'
+                          : activePlan.status === 'modified'
+                          ? 'bg-purple-950 text-purple-300 border border-purple-700'
                           : activePlan.status === 'rejected'
-                          ? 'bg-red-950 text-red-300 border border-red-800'
-                          : 'bg-amber-950 text-amber-300 border border-amber-800'
+                          ? 'bg-slate-900 text-slate-400 border border-slate-700'
+                          : 'bg-amber-950 text-amber-300 border border-amber-700'
                       }`}
                     >
-                      {activePlan.status}
+                      {activePlan.status.replace('_', ' ')}
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400">
@@ -725,48 +954,323 @@ export function CommandCenterPage() {
                   )}
                 </div>
 
+                {/* Lifecycle Stepper */}
+                {activePlan && (
+                  <div className="bg-[#070b12] p-3 rounded-xl border border-[#1f2e48]">
+                    <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-semibold">
+                      {/* Step 1: Draft / Modified */}
+                      <div
+                        className={`py-1.5 px-1 rounded flex flex-col items-center gap-1 ${
+                          activePlan.status === 'draft' || activePlan.status === 'modified'
+                            ? 'bg-amber-950/60 text-amber-300 border border-amber-800'
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>1. DRAFT</span>
+                          {(activePlan.status === 'approved' ||
+                            activePlan.status === 'in_transit' ||
+                            activePlan.status === 'delivered') && (
+                            <Check className="w-3 h-3 text-emerald-400" />
+                          )}
+                        </div>
+                        {activePlan.status === 'modified' && (
+                          <span className="text-[9px] text-purple-400 font-mono">(Edited)</span>
+                        )}
+                      </div>
+
+                      {/* Step 2: Approved */}
+                      <div
+                        className={`py-1.5 px-1 rounded flex flex-col items-center gap-1 ${
+                          activePlan.status === 'approved'
+                            ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800'
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>2. APPROVED</span>
+                          {(activePlan.status === 'in_transit' || activePlan.status === 'delivered') && (
+                            <Check className="w-3 h-3 text-emerald-400" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Step 3: In Transit */}
+                      <div
+                        className={`py-1.5 px-1 rounded flex flex-col items-center gap-1 ${
+                          activePlan.status === 'in_transit'
+                            ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-700 animate-pulse'
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>3. DISPATCH</span>
+                          {activePlan.status === 'delivered' && <Check className="w-3 h-3 text-emerald-400" />}
+                        </div>
+                      </div>
+
+                      {/* Step 4: Outcome (Delivered / Failed / Rejected) */}
+                      <div
+                        className={`py-1.5 px-1 rounded flex flex-col items-center gap-1 ${
+                          activePlan.status === 'delivered'
+                            ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800'
+                            : activePlan.status === 'failed'
+                            ? 'bg-red-950/60 text-red-300 border border-red-800'
+                            : activePlan.status === 'rejected'
+                            ? 'bg-slate-900 text-slate-400 border border-slate-700'
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        <span>
+                          {activePlan.status === 'failed'
+                            ? 'FAILED'
+                            : activePlan.status === 'rejected'
+                            ? 'REJECTED'
+                            : '4. DELIVERED'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {activePlan ? (
                   <div className="space-y-3">
-                    <div className="text-xs text-slate-300 bg-[#131e31] p-3 rounded-xl border border-[#1f2e48] space-y-1">
-                      <div>Plan ID: <strong className="text-white font-mono">{activePlan.id}</strong></div>
-                      {activePlan.approved_by && (
-                        <div>
-                          Approved By: <strong className="text-emerald-400">{activePlan.approver_name || activePlan.approved_by}</strong>{' '}
-                          at {activePlan.approved_at ? new Date(activePlan.approved_at).toLocaleString() : 'N/A'}
+                    {/* Plan Details & Audit Timeline */}
+                    <div className="text-xs text-slate-300 bg-[#131e31] p-3.5 rounded-xl border border-[#1f2e48] space-y-2">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-mono text-cyan-400 font-bold">Plan #{activePlan.id}</span>
+                        <span className="text-slate-500 font-mono">
+                          Created: {new Date(activePlan.created_at).toLocaleString()}
+                        </span>
+                      </div>
+
+                      {/* Planned Allocations Summary */}
+                      {activePlan.plan?.resources_recommended && (
+                        <div className="bg-[#070b12] p-2.5 rounded-lg border border-[#1f2e48] grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
+                          <div>
+                            <span className="text-slate-500">Boats:</span>{' '}
+                            <strong className="text-cyan-300">{activePlan.plan.resources_recommended.boats ?? 0}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Food:</span>{' '}
+                            <strong className="text-amber-300">{activePlan.plan.resources_recommended.food_kits ?? 0}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Water:</span>{' '}
+                            <strong className="text-blue-300">{activePlan.plan.resources_recommended.water_units ?? 0}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Medical:</span>{' '}
+                            <strong className="text-emerald-300">{activePlan.plan.resources_recommended.medical_teams ?? 0}</strong>
+                          </div>
                         </div>
                       )}
-                      <div>Rationale: {activePlan.explanation}</div>
+
+                      <div className="text-slate-400">
+                        Source Center: <strong className="text-slate-200">{activePlan.plan?.source_center || activePlan.plan?.primary_source_center?.name || 'Barpeta Base #3'}</strong>
+                      </div>
+
+                      {activePlan.source_simulation_id && (
+                        <div className="text-[11px] text-purple-300 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                          <span>Promoted from What-If Simulation Run: <strong className="font-mono">{activePlan.source_simulation_id}</strong></span>
+                        </div>
+                      )}
+
+                      {/* Audit Sign-offs */}
+                      <div className="space-y-1 pt-1 text-[11px] text-slate-400 border-t border-[#1f2e48]/60">
+                        {activePlan.approved_by && (
+                          <div className="flex items-center gap-1.5 text-emerald-400">
+                            <Check className="w-3.5 h-3.5" />
+                            <span>
+                              Approved by <strong>{activePlan.approver_name || activePlan.approved_by}</strong> at{' '}
+                              {activePlan.approved_at ? new Date(activePlan.approved_at).toLocaleString() : 'N/A'}
+                            </span>
+                          </div>
+                        )}
+
+                        {activePlan.dispatched_by && (
+                          <div className="flex items-center gap-1.5 text-cyan-400">
+                            <Truck className="w-3.5 h-3.5" />
+                            <span>
+                              Dispatched by <strong>{activePlan.dispatched_by}</strong> at{' '}
+                              {activePlan.dispatched_at ? new Date(activePlan.dispatched_at).toLocaleString() : 'N/A'}
+                            </span>
+                          </div>
+                        )}
+
+                        {activePlan.completed_at && (
+                          <div
+                            className={`flex items-center gap-1.5 ${
+                              activePlan.status === 'delivered' ? 'text-emerald-400' : 'text-red-400'
+                            }`}
+                          >
+                            {activePlan.status === 'delivered' ? (
+                              <PackageCheck className="w-3.5 h-3.5" />
+                            ) : (
+                              <AlertCircle className="w-3.5 h-3.5" />
+                            )}
+                            <span>
+                              {activePlan.status === 'delivered' ? 'Delivered' : 'Failed'} at{' '}
+                              {new Date(activePlan.completed_at).toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+
+                        {activePlan.failure_reason && (
+                          <div className="text-red-300 bg-red-950/40 p-2 rounded border border-red-900/60 mt-1">
+                            <strong>Failure Cause:</strong> {activePlan.failure_reason}
+                          </div>
+                        )}
+
+                        {activePlan.execution_notes && (
+                          <div className="text-slate-300 italic pt-0.5">
+                            &ldquo;{activePlan.execution_notes}&rdquo;
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Action Buttons for Command Center Officer */}
-                    {activePlan.status === 'draft' && (
+                    {/* Action Controls by Lifecycle Phase */}
+                    {(activePlan.status === 'draft' || activePlan.status === 'modified') && canManagePlans && (
                       <div className="space-y-2">
                         <input
                           type="text"
                           value={approvalNotes}
                           onChange={(e) => setApprovalNotes(e.target.value)}
-                          placeholder="Optional approval notes for field commanders..."
-                          className="w-full bg-[#131e31] border border-[#1f2e48] rounded-xl px-3 py-2 text-xs text-white outline-none"
+                          placeholder="Optional approval authorization notes..."
+                          className="w-full bg-[#131e31] border border-[#1f2e48] rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
                         />
-                        <div className="flex items-center gap-2.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <button
                             type="button"
                             onClick={() => handleApprovePlan(activePlan.id)}
                             disabled={actionLoading}
-                            className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                           >
                             <CheckCircle2 className="w-4 h-4" />
                             <span>Approve Plan</span>
                           </button>
                           <button
                             type="button"
+                            onClick={handleOpenEditModal}
+                            disabled={actionLoading}
+                            className="py-2.5 rounded-xl bg-[#1f2e48] hover:bg-[#283b5c] text-cyan-300 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border border-cyan-800/40"
+                          >
+                            <Edit3 className="w-4 h-4 text-cyan-400" />
+                            <span>Edit Allocations</span>
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setShowRejectModal(true)}
                             disabled={actionLoading}
-                            className="px-4 py-2.5 rounded-xl bg-red-950/60 hover:bg-red-900 border border-red-800 text-red-300 font-bold text-xs transition cursor-pointer disabled:opacity-50"
+                            className="py-2.5 rounded-xl bg-red-950/60 hover:bg-red-900 border border-red-800 text-red-300 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                           >
-                            Reject
+                            <XCircle className="w-4 h-4" />
+                            <span>Reject</span>
                           </button>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Approved -> Dispatch Control */}
+                    {activePlan.status === 'approved' && canManagePlans && (
+                      <div className="space-y-2 bg-[#070b12] p-3 rounded-xl border border-emerald-900/40">
+                        <div className="text-[11px] text-emerald-300 flex items-center gap-1.5">
+                          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>Authorized by Command Officer. Ready for physical inventory dispatch.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleOpenDispatchModal}
+                          disabled={actionLoading}
+                          className="w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-950/50 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          <Truck className="w-4 h-4" />
+                          <span>Execute &amp; Dispatch Response Plan (Deduct Inventory)</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* In Transit -> Field Delivery or Failure */}
+                    {activePlan.status === 'in_transit' && canExecuteDelivery && (
+                      <div className="space-y-2 bg-[#070b12] p-3 rounded-xl border border-cyan-900/40">
+                        <div className="text-[11px] text-cyan-300 flex items-center gap-1.5">
+                          <Truck className="w-4 h-4 text-cyan-400 animate-pulse shrink-0" />
+                          <span>Mission Active. Vehicles deployed to zone. Awaiting field confirmation.</span>
+                        </div>
+                        <input
+                          type="text"
+                          value={deliveryNotes}
+                          onChange={(e) => setDeliveryNotes(e.target.value)}
+                          placeholder="Field delivery confirmation notes (optional)..."
+                          className="w-full bg-[#131e31] border border-[#1f2e48] rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={handleDeliverPlan}
+                            disabled={actionLoading}
+                            className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <PackageCheck className="w-4 h-4" />
+                            <span>Confirm Delivery</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFailReason('');
+                              setFailError(null);
+                              setShowFailModal(true);
+                            }}
+                            disabled={actionLoading}
+                            className="py-2.5 rounded-xl bg-red-950/70 hover:bg-red-900 border border-red-800 text-red-300 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <AlertTriangle className="w-4 h-4 text-red-400" />
+                            <span>Report Failure</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Failed -> Reallocation Workflow */}
+                    {activePlan.status === 'failed' && canManagePlans && (
+                      <div className="space-y-2 bg-[#070b12] p-3 rounded-xl border border-red-900/40">
+                        <div className="text-[11px] text-red-300 flex items-center gap-1.5">
+                          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                          <span>Transport disrupted. Run reallocation to draft replacement against live stock.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleReallocatePlan}
+                          disabled={actionLoading}
+                          className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          <RotateCw className={`w-4 h-4 ${actionLoading ? 'animate-spin' : ''}`} />
+                          <span>Reallocate Replacement Plan (Audited Draft)</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Delivered Message */}
+                    {activePlan.status === 'delivered' && (
+                      <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Mission completed successfully. Supplies delivered to designated relief sector.</span>
+                      </div>
+                    )}
+
+                    {/* Rejected Message */}
+                    {activePlan.status === 'rejected' && (
+                      <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-xl text-xs text-red-300 flex items-center gap-2">
+                        <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                        <span>Plan rejected. New demand calculation or parameters required.</span>
+                      </div>
+                    )}
+
+                    {!canManagePlans && !canExecuteDelivery && (
+                      <div className="text-[11px] text-slate-500 italic p-2 bg-[#070b12] rounded-lg">
+                        Clearance Note: Executive plan modification and dispatch authorization is restricted to Command Center Officers.
                       </div>
                     )}
                   </div>
@@ -1246,14 +1750,31 @@ export function CommandCenterPage() {
                         </p>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setSimResult(null)}
-                        className="px-3 py-1.5 rounded-lg bg-[#131e31] hover:bg-[#1a2942] border border-[#1f2e48] text-xs text-slate-300 flex items-center gap-1.5 transition self-start sm:self-auto shrink-0"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>Clear Results</span>
-                      </button>
+                      <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                        {canManagePlans && (
+                          <button
+                            type="button"
+                            onClick={handlePromoteSimulation}
+                            disabled={promoteLoading}
+                            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 shadow-md shadow-emerald-950/40"
+                          >
+                            {promoteLoading ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+                            )}
+                            <span>Promote to Draft Plan</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSimResult(null)}
+                          className="px-3 py-1.5 rounded-lg bg-[#131e31] hover:bg-[#1a2942] border border-[#1f2e48] text-xs text-slate-300 flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Clear Results</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Baseline vs Scenario Diff Table */}
@@ -1439,6 +1960,303 @@ export function CommandCenterPage() {
                 className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs cursor-pointer disabled:opacity-50"
               >
                 {actionLoading ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Plan Before Approval Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-[#0d1522] border border-cyan-500/50 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-cyan-400 font-bold text-base">
+              <Edit3 className="w-5 h-5" />
+              <span>Modify Response Plan Allocations</span>
+            </div>
+            <p className="text-xs text-slate-300">
+              Operator override before final approval. Adjust proposed supply quantities or supplying hub. Changes and operator justification are permanently recorded in the audit registry.
+            </p>
+
+            {editError && (
+              <div className="p-3 bg-red-950/60 border border-red-700 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                  Supplying Resource Depot
+                </label>
+                <select
+                  value={editCenterId}
+                  onChange={(e) => setEditCenterId(e.target.value)}
+                  className="w-full bg-[#131e31] border border-[#1f2e48] rounded-xl p-2.5 text-xs text-white outline-none focus:border-cyan-500"
+                >
+                  {centers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} (Hub #{c.id})
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  Route feasibility will be validated server-side. Blocked segments (e.g. Route A) will be rejected.
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Boats</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editQuantities.boats}
+                    onChange={(e) =>
+                      setEditQuantities({ ...editQuantities, boats: Math.max(0, parseInt(e.target.value || '0', 10)) })
+                    }
+                    className="w-full bg-[#131e31] border border-[#1f2e48] rounded-xl p-2 text-xs text-white outline-none focus:border-cyan-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Food Kits</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editQuantities.food_kits}
+                    onChange={(e) =>
+                      setEditQuantities({ ...editQuantities, food_kits: Math.max(0, parseInt(e.target.value || '0', 10)) })
+                    }
+                    className="w-full bg-[#131e31] border border-[#1f2e48] rounded-xl p-2 text-xs text-white outline-none focus:border-cyan-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Water Units</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editQuantities.water_units}
+                    onChange={(e) =>
+                      setEditQuantities({ ...editQuantities, water_units: Math.max(0, parseInt(e.target.value || '0', 10)) })
+                    }
+                    className="w-full bg-[#131e31] border border-[#1f2e48] rounded-xl p-2 text-xs text-white outline-none focus:border-cyan-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 mb-1">Med Teams</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editQuantities.medical_teams}
+                    onChange={(e) =>
+                      setEditQuantities({
+                        ...editQuantities,
+                        medical_teams: Math.max(0, parseInt(e.target.value || '0', 10)),
+                      })
+                    }
+                    className="w-full bg-[#131e31] border border-[#1f2e48] rounded-xl p-2 text-xs text-white outline-none focus:border-cyan-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                  Reason for Plan Modification <span className="text-red-400">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={editReason}
+                  onChange={(e) => setEditReason(e.target.value)}
+                  placeholder="e.g. Higher water shortage observed by ground teams; adjusting quantity from 600 to 750..."
+                  className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-cyan-500 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="px-4 py-2 rounded-xl bg-[#131e31] text-slate-300 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePlanEdit}
+                disabled={actionLoading}
+                className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs cursor-pointer disabled:opacity-50 shadow-md"
+              >
+                {actionLoading ? 'Saving...' : 'Save Modifications'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dispatch Confirmation Modal (Safe Inventory Deduction) */}
+      {showDispatchModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-[#0d1522] border border-cyan-500/50 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-cyan-400 font-bold text-base">
+              <Truck className="w-5 h-5" />
+              <span>Confirm Response Plan Dispatch &amp; Stock Deduction</span>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Executing this approved plan will initiate convoy dispatch. Warehouse inventory will be deducted immediately in an atomic PostgreSQL transaction with row locks.
+            </p>
+
+            {/* Atomic Protection Banner */}
+            <div className="p-3 bg-[#070b12] border border-cyan-900/60 rounded-xl text-xs space-y-1">
+              <div className="font-bold text-slate-200">Pre-Flight Safety Check:</div>
+              <p className="text-slate-400 text-[11px] leading-relaxed">
+                Stock availability is verified inside the transaction before any deduction. If any resource is deficient, the transaction aborts with zero inventory mutated.
+              </p>
+            </div>
+
+            {/* Shortage Error Banner (PRD FR-6.3) */}
+            {dispatchError && (
+              <div className="p-3.5 bg-red-950/70 border border-red-600 rounded-xl text-xs text-red-200 space-y-1">
+                <div className="flex items-center gap-2 font-bold text-red-300">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                  <span>Insufficient Warehouse Stock</span>
+                </div>
+                <div className="text-[11px] text-red-200 leading-relaxed font-mono">
+                  {dispatchError}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                Dispatch Execution Notes (Optional)
+              </label>
+              <textarea
+                rows={2}
+                value={dispatchNotes}
+                onChange={(e) => setDispatchNotes(e.target.value)}
+                placeholder="e.g. Escort vehicle NDRF-4 assigned; departure via Route C at 13:00 hrs..."
+                className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-cyan-500 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDispatchModal(false)}
+                className="px-4 py-2 rounded-xl bg-[#131e31] text-slate-300 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDispatchPlan}
+                disabled={actionLoading}
+                className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs cursor-pointer disabled:opacity-50 shadow-lg shadow-cyan-950/50 flex items-center gap-1.5"
+              >
+                <Truck className="w-4 h-4" />
+                <span>{actionLoading ? 'Executing Atomic Dispatch...' : 'Authorize & Dispatch'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transport Failure Modal */}
+      {showFailModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-[#0d1522] border border-red-500/50 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-red-400 font-bold text-base">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Report Response Plan Transport Failure</span>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              State the operational disruption reason and declare the inventory disposition. All records are permanently audited.
+            </p>
+
+            {failError && (
+              <div className="p-3 bg-red-950/60 border border-red-700 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{failError}</span>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                  Disruption / Failure Reason <span className="text-red-400">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={failReason}
+                  onChange={(e) => setFailReason(e.target.value)}
+                  placeholder="e.g. Bridge submerged at Route C km 8; convoy forced to abort..."
+                  className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-red-500 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1.5">
+                  Inventory Disposition
+                </label>
+                <div className="space-y-2 text-xs">
+                  <label className="flex items-start gap-2 p-2.5 rounded-xl bg-[#131e31] border border-[#1f2e48] cursor-pointer hover:border-cyan-500/50">
+                    <input
+                      type="radio"
+                      name="disposition"
+                      value="stock_returned"
+                      checked={failDisposition === 'stock_returned'}
+                      onChange={() => setFailDisposition('stock_returned')}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <strong className="text-emerald-400 block">Stock Returned to Depot (Restitution)</strong>
+                      <span className="text-[11px] text-slate-400">
+                        Supplies were safely brought back to warehouse and inventory restored.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-2 p-2.5 rounded-xl bg-[#131e31] border border-[#1f2e48] cursor-pointer hover:border-red-500/50">
+                    <input
+                      type="radio"
+                      name="disposition"
+                      value="stock_lost"
+                      checked={failDisposition === 'stock_lost'}
+                      onChange={() => setFailDisposition('stock_lost')}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <strong className="text-red-400 block">Stock Lost / Destroyed</strong>
+                      <span className="text-[11px] text-slate-400">
+                        Supplies were washed away, damaged, or lost in transit. Inventory is NOT refunded.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowFailModal(false)}
+                className="px-4 py-2 rounded-xl bg-[#131e31] text-slate-300 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleFailPlan}
+                disabled={actionLoading}
+                className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs cursor-pointer disabled:opacity-50"
+              >
+                {actionLoading ? 'Logging Failure...' : 'Confirm Failure Report'}
               </button>
             </div>
           </div>

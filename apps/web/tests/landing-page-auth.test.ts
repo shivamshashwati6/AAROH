@@ -13,6 +13,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getHomeRouteForUser,
+  getSafeRedirectForUser,
   isRoleAuthorized,
   isCommandCenterRole,
   isCitizenRole,
@@ -41,7 +42,7 @@ describe('RELIEF-OS Landing Page & Secure Entry Experience Tests', () => {
       assert.equal(getHomeRouteForUser(citizen), '/citizen');
     });
 
-    it('should route authenticated command_center, admin, and officer directly to /command', () => {
+    it('should route authenticated command_center and officer to /command, and admin to /admin', () => {
       const commandUser: User = {
         id: 'usr-cmd-1',
         name: 'Commander Demo',
@@ -62,8 +63,8 @@ describe('RELIEF-OS Landing Page & Secure Entry Experience Tests', () => {
       };
 
       assert.equal(getHomeRouteForUser(commandUser), '/command');
-      assert.equal(getHomeRouteForUser(adminUser), '/command');
       assert.equal(getHomeRouteForUser(officerUser), '/command');
+      assert.equal(getHomeRouteForUser(adminUser), '/admin');
     });
 
     it('should route authenticated department personnel directly to /department', () => {
@@ -92,6 +93,55 @@ describe('RELIEF-OS Landing Page & Secure Entry Experience Tests', () => {
       assert.equal(getHomeRouteForUser(healthUser), '/department');
       assert.equal(getHomeRouteForUser(supplyUser), '/department');
       assert.equal(getHomeRouteForUser(rescueUser), '/department');
+    });
+
+    it('should cleanly resolve safe post-login redirects and prevent returning to root, login, signup, or unauthorized portals', () => {
+      const citizen: User = {
+        id: 'usr-cit-1',
+        name: 'Citizen Demo',
+        email: 'citizen@relief.internal',
+        role: 'citizen',
+        department: null,
+      };
+      const commander: User = {
+        id: 'usr-cmd-1',
+        name: 'Commander Demo',
+        email: 'command@relief.internal',
+        role: 'command_center',
+      };
+      const deptUser: User = {
+        id: 'usr-dept-1',
+        name: 'Health Lead',
+        email: 'health@relief.internal',
+        role: 'department',
+        department: 'health',
+      };
+
+      // When coming from /, /login, or /signup, must redirect to home route
+      assert.equal(getSafeRedirectForUser(citizen, '/'), '/citizen');
+      assert.equal(getSafeRedirectForUser(citizen, '/login'), '/citizen');
+      assert.equal(getSafeRedirectForUser(citizen, '/signup'), '/citizen');
+      assert.equal(getSafeRedirectForUser(citizen, null), '/citizen');
+
+      assert.equal(getSafeRedirectForUser(commander, '/'), '/command');
+      assert.equal(getSafeRedirectForUser(commander, '/login'), '/command');
+      assert.equal(getSafeRedirectForUser(commander, '/signup'), '/command');
+
+      assert.equal(getSafeRedirectForUser(deptUser, '/'), '/department');
+      assert.equal(getSafeRedirectForUser(deptUser, '/login'), '/department');
+
+      // Citizen attempting to access command or department is safely restricted to citizen portal
+      assert.equal(getSafeRedirectForUser(citizen, '/command'), '/citizen');
+      assert.equal(getSafeRedirectForUser(citizen, '/department'), '/citizen');
+
+      // Command officer attempting to access citizen or department is safely restricted to command
+      assert.equal(getSafeRedirectForUser(commander, '/citizen'), '/command');
+      assert.equal(getSafeRedirectForUser(commander, '/department'), '/command');
+
+      // Public operational views like /dashboard and /report are preserved for all roles
+      assert.equal(getSafeRedirectForUser(citizen, '/dashboard'), '/dashboard');
+      assert.equal(getSafeRedirectForUser(citizen, '/report'), '/report');
+      assert.equal(getSafeRedirectForUser(commander, '/dashboard'), '/dashboard');
     });
   });
 

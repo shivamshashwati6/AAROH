@@ -284,7 +284,7 @@ export function SignupPage() {
             <p className="text-xs text-slate-400">
               Already have an account?{' '}
               <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-semibold underline">
-                Sign In to Workspace
+                Sign in
               </Link>
             </p>
           </div>

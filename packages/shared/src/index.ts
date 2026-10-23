@@ -162,7 +162,72 @@ export interface ResponsePlan {
   officer_notes?: string;
   approved_by?: string;
   approved_at?: string;
+  dispatched_by?: string;
+  dispatched_at?: string;
+  completed_at?: string;
+  failure_reason?: string;
+  execution_notes?: string;
+  source_simulation_id?: string;
   created_at: string;
+}
+
+export type ResponsePlanStatus =
+  | 'draft'
+  | 'approved'
+  | 'modified'
+  | 'rejected'
+  | 'in_transit'
+  | 'delivered'
+  | 'failed';
+
+export interface ModifyPlanPayload {
+  resources_recommended?: {
+    food_kits?: number;
+    water_units?: number;
+    boats?: number;
+    medical_teams?: number;
+  };
+  resources?: {
+    food_kits?: number;
+    water_units?: number;
+    boats?: number;
+    medical_teams?: number;
+  };
+  source_center_id?: string;
+  supplying_center_id?: string;
+  source_center?: string;
+  selected_route?: string;
+  reason?: string;
+}
+
+export interface DispatchPlanPayload {
+  execution_notes?: string;
+  assigned_vehicle_count?: number;
+}
+
+export interface FailPlanPayload {
+  reason?: string;
+  failure_reason?: string;
+  disposition: 'stock_lost' | 'stock_returned';
+  notes?: string;
+  returned_resources?: {
+    food_kits?: number;
+    water_units?: number;
+    boats?: number;
+    medical_teams?: number;
+  };
+}
+
+export interface ReallocatePlanPayload {
+  planning_days?: number;
+  reason?: string;
+  notes?: string;
+}
+
+export interface PromoteSimulationPayload {
+  simulation_id?: string;
+  zone_id?: string;
+  notes?: string;
 }
 
 export interface SimulationChange {
@@ -307,4 +372,52 @@ export interface AuthResponse {
   token?: string;
   expires_at?: string;
 }
+
+// -----------------------------------------------------------------------------
+// Priority Scoring & System Settings Domain Types
+// -----------------------------------------------------------------------------
+export interface PriorityWeights {
+  w_population: number;
+  w_severity: number;
+  w_medical: number;
+  w_shortage: number;
+  w_accessibility: number;
+  w_vulnerability: number;
+}
+
+export interface PriorityWeightsPercentages {
+  population: number;
+  severity: number;
+  medical: number;
+  shortage: number;
+  accessibility: number;
+  vulnerability: number;
+}
+
+export interface PrioritySettingsResponse {
+  weights: PriorityWeights;
+  percentages: PriorityWeightsPercentages;
+  is_default: boolean;
+  updated_at: string;
+}
+
+export interface SystemSettingsResponse {
+  priority_weights: PrioritySettingsResponse;
+  demand_parameters: {
+    planning_days: number;
+    food_kits_per_person_ratio: number;
+    water_units_per_person_ratio: number;
+    stranded_people_per_boat: number;
+    people_per_medical_team: number;
+    medical_rounding_mode: string;
+  };
+  canonical_defaults: {
+    priority_weights: {
+      weights: PriorityWeights;
+      percentages: PriorityWeightsPercentages;
+    };
+    demand_parameters: Record<string, unknown>;
+  };
+}
+
 

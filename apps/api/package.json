@@ -8,7 +8,7 @@
     "start": "node dist/index.js",
     "lint": "echo \"API lint passed (Phase 1)\"",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/**/*.test.ts"
+    "test": "tsx --test --test-concurrency=1 tests/**/*.test.ts"
   },
   "dependencies": {
     "@relief-os/shared": "*",

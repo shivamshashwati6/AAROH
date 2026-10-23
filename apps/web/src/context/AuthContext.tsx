@@ -3,6 +3,7 @@ import { User, UserRole, DepartmentType } from '@relief-os/shared';
 import { api, ApiError } from '../services/api';
 import {
   isCitizenRole,
+  isAdminRole,
   isCommandCenterRole,
   isDepartmentRole,
   AUTH_USER_KEY,
@@ -18,6 +19,7 @@ export interface AuthContextType {
   userRole: UserRole | null;
   department: DepartmentType | null;
   isCitizen: boolean;
+  isAdmin: boolean;
   isCommandCenter: boolean;
   isDepartment: boolean;
   login: (email: string, password: string) => Promise<User>;
@@ -151,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const department = (user?.department as DepartmentType) ?? null;
 
   const isCitizen = useMemo(() => isCitizenRole(userRole), [userRole]);
+  const isAdmin = useMemo(() => isAdminRole(userRole), [userRole]);
   const isCommandCenter = useMemo(() => isCommandCenterRole(userRole), [userRole]);
   const isDepartment = useMemo(() => isDepartmentRole(userRole), [userRole]);
 
@@ -164,6 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userRole,
       department,
       isCitizen,
+      isAdmin,
       isCommandCenter,
       isDepartment,
       login,
@@ -180,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userRole,
       department,
       isCitizen,
+      isAdmin,
       isCommandCenter,
       isDepartment,
       login,

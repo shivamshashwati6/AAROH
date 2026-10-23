@@ -39,6 +39,14 @@ import {
   FileText,
   Sliders,
   CheckCircle,
+  Phone,
+  MapPin,
+  Search,
+  Users,
+  Filter,
+  Eye,
+  X,
+  ShieldAlert,
 } from 'lucide-react';
 
 export function DepartmentPage() {
@@ -77,7 +85,111 @@ export function DepartmentPage() {
   } | null>(null);
 
   // Active Tactical View Tab
-  const [activeTab, setActiveTab] = useState<'operations' | 'map' | 'plans'>('operations');
+  const [activeTab, setActiveTab] = useState<'operations' | 'map' | 'plans' | 'reports'>('operations');
+
+  // Department-Specific Report Filtering State
+  const [reportScope, setReportScope] = useState<'department' | 'all'>('department');
+  const [reportSeverityFilter, setReportSeverityFilter] = useState<string>('all');
+  const [reportStatusFilter, setReportStatusFilter] = useState<string>('all');
+  const [reportSearch, setReportSearch] = useState<string>('');
+  const [selectedReportDetail, setSelectedReportDetail] = useState<CitizenReport | null>(null);
+
+  // Department report classification helpers
+  const isHealthReport = useCallback((r: CitizenReport) => {
+    const text = `${r.category || ''} ${r.description || ''} ${r.location_name || ''}`.toLowerCase();
+    return (
+      r.medical_need === true ||
+      text.includes('medic') ||
+      text.includes('health') ||
+      text.includes('injur') ||
+      text.includes('doctor') ||
+      text.includes('hospital') ||
+      text.includes('casualty') ||
+      text.includes('wound') ||
+      text.includes('disease') ||
+      text.includes('trauma')
+    );
+  }, []);
+
+  const isSupplyReport = useCallback((r: CitizenReport) => {
+    const text = `${r.category || ''} ${r.description || ''} ${r.location_name || ''}`.toLowerCase();
+    return (
+      text.includes('food') ||
+      text.includes('water') ||
+      text.includes('supply') ||
+      text.includes('ration') ||
+      text.includes('starv') ||
+      text.includes('drink') ||
+      text.includes('hunger') ||
+      text.includes('shortage') ||
+      text.includes('grain') ||
+      text.includes('provision')
+    );
+  }, []);
+
+  const isRescueReport = useCallback((r: CitizenReport) => {
+    const text = `${r.category || ''} ${r.description || ''} ${r.location_name || ''}`.toLowerCase();
+    return (
+      r.severity === 'critical' ||
+      text.includes('rescue') ||
+      text.includes('trapped') ||
+      text.includes('stranded') ||
+      text.includes('evacuat') ||
+      text.includes('submerg') ||
+      text.includes('boat') ||
+      text.includes('flood') ||
+      text.includes('blocked') ||
+      text.includes('road') ||
+      text.includes('drown') ||
+      text.includes('cut off')
+    );
+  }, []);
+
+  // Filtered reports list respecting privacy, department relevance, and search
+  const filteredDepartmentReports = React.useMemo(() => {
+    return reports.filter((r) => {
+      // 1. Department Scope
+      if (reportScope === 'department') {
+        if (department === 'health' && !isHealthReport(r)) return false;
+        if (department === 'supply' && !isSupplyReport(r)) return false;
+        if (department === 'rescue' && !isRescueReport(r)) return false;
+      }
+
+      // 2. Severity Filter
+      if (reportSeverityFilter !== 'all' && r.severity !== reportSeverityFilter) {
+        return false;
+      }
+
+      // 3. Status Filter
+      if (reportStatusFilter !== 'all' && r.status !== reportStatusFilter) {
+        return false;
+      }
+
+      // 4. Search Filter
+      if (reportSearch.trim()) {
+        const q = reportSearch.toLowerCase();
+        const matchesId = r.id.toLowerCase().includes(q);
+        const matchesDesc = r.description.toLowerCase().includes(q);
+        const matchesLoc = (r.location_name || '').toLowerCase().includes(q);
+        const matchesCat = (r.category || '').toLowerCase().includes(q);
+        if (!matchesId && !matchesDesc && !matchesLoc && !matchesCat) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [
+    reports,
+    reportScope,
+    department,
+    reportSeverityFilter,
+    reportStatusFilter,
+    reportSearch,
+    isHealthReport,
+    isSupplyReport,
+    isRescueReport,
+  ]);
 
   // Load Department Data
   const loadDepartmentData = useCallback(async () => {
@@ -632,6 +744,18 @@ export function DepartmentPage() {
               >
                 <FileText className="w-4 h-4" />
                 <span>Approved Response Plans ({recommendations.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('reports')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                  activeTab === 'reports'
+                    ? `${colors.btnPrimary} shadow-lg shadow-cyan-950/40`
+                    : 'bg-[#0d1522] hover:bg-[#131e31] text-slate-400 border border-[#1f2e48]'
+                }`}
+              >
+                <AlertTriangle className="w-4 h-4" />
+                <span>Incident &amp; Distress Reports ({filteredDepartmentReports.length})</span>
               </button>
             </div>
 
@@ -1444,6 +1568,10 @@ export function DepartmentPage() {
                     {recommendations.map((rec) => {
                       const isApproved = rec.status === 'approved';
                       const isRejected = rec.status === 'rejected';
+                      const isInTransit = rec.status === 'in_transit';
+                      const isDelivered = rec.status === 'delivered';
+                      const isFailed = rec.status === 'failed';
+                      const isModified = rec.status === 'modified';
 
                       return (
                         <div
@@ -1459,12 +1587,20 @@ export function DepartmentPage() {
                                 className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
                                   isApproved
                                     ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                                    : isRejected
+                                    : isInTransit
+                                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-700 animate-pulse'
+                                    : isDelivered
+                                    ? 'bg-emerald-950 text-emerald-200 border border-emerald-600'
+                                    : isFailed
                                     ? 'bg-red-950 text-red-300 border border-red-800'
+                                    : isModified
+                                    ? 'bg-purple-950 text-purple-300 border border-purple-800'
+                                    : isRejected
+                                    ? 'bg-slate-900 text-slate-400 border border-slate-700'
                                     : 'bg-amber-950 text-amber-300 border border-amber-800'
                                 }`}
                               >
-                                {rec.status}
+                                {rec.status.replace('_', ' ')}
                               </span>
                             </div>
 
@@ -1497,6 +1633,33 @@ export function DepartmentPage() {
                             </div>
                           )}
 
+                          {isInTransit && (
+                            <div className="flex items-center gap-2 text-xs text-cyan-400 font-medium pt-1">
+                              <Truck className="w-4 h-4 animate-pulse" />
+                              <span>
+                                Mission Active &bull; Transport in transit to sector. Dispatched by {rec.dispatched_by || 'Officer'}.
+                              </span>
+                            </div>
+                          )}
+
+                          {isDelivered && (
+                            <div className="flex items-center gap-2 text-xs text-emerald-400 font-medium pt-1">
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>
+                                Mission Accomplished &bull; Supplies confirmed delivered at {rec.completed_at ? new Date(rec.completed_at).toLocaleString() : 'N/A'}.
+                              </span>
+                            </div>
+                          )}
+
+                          {isFailed && (
+                            <div className="flex items-center gap-2 text-xs text-red-400 font-medium pt-1">
+                              <AlertCircle className="w-4 h-4" />
+                              <span>
+                                Transport Disrupted &bull; {rec.failure_reason || 'Mission aborted'}. Reallocation pending.
+                              </span>
+                            </div>
+                          )}
+
                           {isRejected && (
                             <div className="flex items-center gap-2 text-xs text-red-400 font-medium pt-1">
                               <AlertCircle className="w-4 h-4" />
@@ -1504,15 +1667,368 @@ export function DepartmentPage() {
                             </div>
                           )}
 
-                          {!isApproved && !isRejected && (
+                          {!isApproved && !isRejected && !isInTransit && !isDelivered && !isFailed && (
                             <div className="flex items-center gap-2 text-xs text-amber-400 font-medium pt-1">
                               <Clock className="w-4 h-4" />
-                              <span>Draft Plan &bull; Awaiting Command Center review &amp; authorization</span>
+                              <span>
+                                {isModified ? 'Modified Draft Plan' : 'Draft Plan'} &bull; Awaiting Command Center review &amp; authorization
+                              </span>
                             </div>
                           )}
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 4: INCIDENT & DISTRESS REPORTS STREAM */}
+            {activeTab === 'reports' && (
+              <div className="space-y-6">
+                {/* Header Information Banner */}
+                <div className="bg-[#0d1522] border border-[#1f2e48] rounded-2xl p-6 relative overflow-hidden shadow-xl">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-cyan-950/70 border border-cyan-800 text-cyan-400">
+                          <AlertTriangle className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                            {department === 'health' && 'Health & Medical Distress Stream'}
+                            {department === 'supply' && 'Supply & Logistics Deficit Stream'}
+                            {department === 'rescue' && 'Rescue, Evacuation & Route Obstruction Stream'}
+                            {!department && 'Disaster Field Incident Stream'}
+                            <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
+                              READ-ONLY TELEMETRY
+                            </span>
+                          </h2>
+                          <p className="text-xs text-slate-400">
+                            {department === 'health' &&
+                              'Direct monitoring of citizen medical emergencies, casualties, and emergency health support calls.'}
+                            {department === 'supply' &&
+                              'Direct monitoring of food shortages, potable drinking water deficits, and critical supply requests.'}
+                            {department === 'rescue' &&
+                              'Direct monitoring of trapped citizens, flood evacuations, blocked roads, and emergency boat rescues.'}
+                            {!department &&
+                              'Real-time distress reports ingested from public citizen submissions and emergency hotlines.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="px-3 py-1.5 rounded-lg bg-[#131e31] border border-[#1f2e48] text-slate-300">
+                        Total Ingested: <strong className="text-white">{reports.length}</strong>
+                      </span>
+                      <span className="px-3 py-1.5 rounded-lg bg-red-950/50 border border-red-800/60 text-red-300">
+                        Critical: <strong className="text-white">{reports.filter((r) => r.severity === 'critical').length}</strong>
+                      </span>
+                      <span className="px-3 py-1.5 rounded-lg bg-rose-950/50 border border-rose-800/60 text-rose-300">
+                        Medical: <strong className="text-white">{reports.filter((r) => r.medical_need).length}</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Privacy Disclosure Notice */}
+                  <div className="mt-4 pt-3 border-t border-[#1f2e48] flex items-center gap-2 text-[11px] text-slate-400">
+                    <ShieldAlert className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                    <span>
+                      <strong>Privacy Protection Active:</strong> Citizen contact details are strictly limited to authorized operational responders ({user?.role}). Department responders have read-only inspection authority.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Filter and Search Bar */}
+                <div className="bg-[#0d1522] border border-[#1f2e48] rounded-2xl p-5 space-y-4 shadow-xl">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    {/* Scope Selector Buttons */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setReportScope('department')}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                          reportScope === 'department'
+                            ? 'bg-cyan-600 text-white shadow-md shadow-cyan-900/30'
+                            : 'bg-[#131e31] hover:bg-[#1a2842] text-slate-300 border border-[#1f2e48]'
+                        }`}
+                      >
+                        <Filter className="w-3.5 h-3.5" />
+                        <span>
+                          {department === 'health' && 'Medical Priority Only'}
+                          {department === 'supply' && 'Supplies Priority Only'}
+                          {department === 'rescue' && 'Rescue & Roads Priority Only'}
+                          {!department && 'Department Focus'}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => setReportScope('all')}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                          reportScope === 'all'
+                            ? 'bg-cyan-600 text-white shadow-md shadow-cyan-900/30'
+                            : 'bg-[#131e31] hover:bg-[#1a2842] text-slate-300 border border-[#1f2e48]'
+                        }`}
+                      >
+                        <span>All Disaster Reports ({reports.length})</span>
+                      </button>
+                    </div>
+
+                    <div className="text-xs text-slate-400">
+                      Showing <strong>{filteredDepartmentReports.length}</strong> matching reports
+                    </div>
+                  </div>
+
+                  {/* Filter Dropdowns and Search Input */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                      <input
+                        type="text"
+                        placeholder="Search description, location, or report ID..."
+                        value={reportSearch}
+                        onChange={(e) => setReportSearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 bg-[#131e31] border border-[#1f2e48] rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+
+                    <div>
+                      <select
+                        value={reportSeverityFilter}
+                        onChange={(e) => setReportSeverityFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#131e31] border border-[#1f2e48] rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="all">All Severities</option>
+                        <option value="critical">Critical Severity</option>
+                        <option value="high">High Severity</option>
+                        <option value="medium">Medium Severity</option>
+                        <option value="low">Low Severity</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <select
+                        value={reportStatusFilter}
+                        onChange={(e) => setReportStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#131e31] border border-[#1f2e48] rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="pending_ai">Pending AI Analysis</option>
+                        <option value="analyzed">Analyzed &amp; Classified</option>
+                        <option value="verified">Verified by Personnel</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reports Grid */}
+                {filteredDepartmentReports.length === 0 ? (
+                  <div className="bg-[#0d1522] border border-[#1f2e48] rounded-2xl p-12 text-center space-y-3">
+                    <AlertCircle className="w-10 h-10 text-slate-500 mx-auto" />
+                    <h3 className="text-base font-bold text-white">No Reports Matching Selected Criteria</h3>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto">
+                      Try adjusting the severity or status filters, or toggle to "All Disaster Reports" to expand your view.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setReportScope('all');
+                        setReportSeverityFilter('all');
+                        setReportStatusFilter('all');
+                        setReportSearch('');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-[#131e31] hover:bg-[#1a2842] border border-[#1f2e48] text-xs font-semibold text-cyan-300 transition"
+                    >
+                      Reset All Filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {filteredDepartmentReports.map((r) => {
+                      const isCritical = r.severity === 'critical';
+                      const isHigh = r.severity === 'high';
+
+                      return (
+                        <div
+                          key={r.id}
+                          className="bg-[#0d1522] border border-[#1f2e48] rounded-2xl p-5 space-y-3 shadow-lg hover:border-cyan-800/80 transition-colors flex flex-col justify-between"
+                        >
+                          <div className="space-y-3">
+                            {/* Card Header: ID, Badges, Timestamp */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1f2e48] pb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-bold text-cyan-400">
+                                  {r.id}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                    isCritical
+                                      ? 'bg-red-950 text-red-300 border border-red-800'
+                                      : isHigh
+                                      ? 'bg-orange-950 text-orange-300 border border-orange-800'
+                                      : 'bg-yellow-950 text-yellow-300 border border-yellow-800'
+                                  }`}
+                                >
+                                  {r.severity || 'Medium'}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                    r.status === 'verified'
+                                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                      : r.status === 'analyzed'
+                                      ? 'bg-blue-950 text-blue-300 border border-blue-800'
+                                      : 'bg-amber-950 text-amber-300 border border-amber-800'
+                                  }`}
+                                >
+                                  {r.status || 'Pending'}
+                                </span>
+                              </div>
+
+                              <span className="text-[11px] text-slate-500 font-mono">
+                                {new Date(r.created_at).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })} &bull; {new Date(r.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                              </span>
+                            </div>
+
+                            {/* Incident Description */}
+                            <p className="text-xs text-slate-200 leading-relaxed font-normal">
+                              {r.description}
+                            </p>
+
+                            {/* Tags & Attributes */}
+                            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                              {r.location_name && (
+                                <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#131e31] border border-[#1f2e48] text-slate-300">
+                                  <MapPin className="w-3 h-3 text-cyan-400" />
+                                  <span>{r.location_name}</span>
+                                </span>
+                              )}
+
+                              {r.people_affected !== undefined && r.people_affected !== null && (
+                                <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#131e31] border border-[#1f2e48] text-slate-300">
+                                  <Users className="w-3 h-3 text-blue-400" />
+                                  <span>{r.people_affected} affected</span>
+                                </span>
+                              )}
+
+                              {r.medical_need && (
+                                <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-800 text-rose-300 font-semibold">
+                                  <HeartPulse className="w-3 h-3 text-rose-400" />
+                                  <span>Medical Attention Required</span>
+                                </span>
+                              )}
+
+                              {r.category && (
+                                <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-slate-300 text-[10px] font-mono">
+                                  {r.category}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Card Footer: Privacy Contact & Read-only Telemetry button */}
+                          <div className="pt-3 border-t border-[#1f2e48] flex items-center justify-between text-xs">
+                            {r.contact_number ? (
+                              <div className="flex items-center gap-1.5 text-emerald-300">
+                                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                                <span className="font-mono font-semibold">{r.contact_number}</span>
+                                <span className="text-[10px] text-slate-500">(Authorized)</span>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-slate-500 italic">
+                                Contact info restricted
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 font-mono">
+                                Read-Only
+                              </span>
+                              <button
+                                onClick={() => setSelectedReportDetail(r)}
+                                className="px-2.5 py-1 rounded-lg bg-[#131e31] hover:bg-[#1a2842] border border-[#1f2e48] text-cyan-300 hover:text-white text-xs font-semibold transition flex items-center gap-1"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>Inspect</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Report Telemetry Modal */}
+                {selectedReportDetail && (
+                  <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-[#0d1522] border border-[#1f2e48] rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative">
+                      <div className="flex items-center justify-between border-b border-[#1f2e48] pb-3">
+                        <h3 className="font-bold text-white text-base flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-cyan-400" />
+                          Incident Report Telemetry &bull; {selectedReportDetail.id}
+                        </h3>
+                        <button
+                          onClick={() => setSelectedReportDetail(null)}
+                          className="text-slate-400 hover:text-white p-1"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-3 text-xs">
+                        <div className="bg-[#131e31] p-3 rounded-xl border border-[#1f2e48] space-y-2">
+                          <div>
+                            <span className="text-slate-400">Description:</span>
+                            <p className="text-white mt-1 leading-relaxed">{selectedReportDetail.description}</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-[#131e31] p-3 rounded-xl border border-[#1f2e48]">
+                            <span className="text-slate-400 block">Severity:</span>
+                            <span className="text-white font-bold uppercase">{selectedReportDetail.severity || 'Medium'}</span>
+                          </div>
+                          <div className="bg-[#131e31] p-3 rounded-xl border border-[#1f2e48]">
+                            <span className="text-slate-400 block">Status:</span>
+                            <span className="text-white font-bold uppercase">{selectedReportDetail.status || 'Pending'}</span>
+                          </div>
+                          <div className="bg-[#131e31] p-3 rounded-xl border border-[#1f2e48]">
+                            <span className="text-slate-400 block">Coordinates (Lat, Lng):</span>
+                            <span className="text-white font-mono">{selectedReportDetail.location_lat.toFixed(4)}, {selectedReportDetail.location_lng.toFixed(4)}</span>
+                          </div>
+                          <div className="bg-[#131e31] p-3 rounded-xl border border-[#1f2e48]">
+                            <span className="text-slate-400 block">Location Name:</span>
+                            <span className="text-white">{selectedReportDetail.location_name || 'Assam Flood Sector'}</span>
+                          </div>
+                          <div className="bg-[#131e31] p-3 rounded-xl border border-[#1f2e48]">
+                            <span className="text-slate-400 block">Medical Attention:</span>
+                            <span className={selectedReportDetail.medical_need ? 'text-rose-400 font-bold' : 'text-slate-300'}>
+                              {selectedReportDetail.medical_need ? 'Urgent Need' : 'None Reported'}
+                            </span>
+                          </div>
+                          <div className="bg-[#131e31] p-3 rounded-xl border border-[#1f2e48]">
+                            <span className="text-slate-400 block">Citizen Contact:</span>
+                            <span className="text-emerald-300 font-mono">
+                              {selectedReportDetail.contact_number || 'Redacted for Privacy'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-[#1f2e48] text-xs">
+                        <span className="text-[11px] text-slate-500">
+                          Ingested at {new Date(selectedReportDetail.created_at).toLocaleString()}
+                        </span>
+                        <button
+                          onClick={() => setSelectedReportDetail(null)}
+                          className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition"
+                        >
+                          Close Telemetry
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

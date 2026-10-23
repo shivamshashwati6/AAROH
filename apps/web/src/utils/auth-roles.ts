@@ -11,6 +11,13 @@ export function isCitizenRole(role?: UserRole | null): boolean {
 }
 
 /**
+ * Checks if a given role is Admin.
+ */
+export function isAdminRole(role?: UserRole | null): boolean {
+  return role === 'admin';
+}
+
+/**
  * Checks if a given role possesses Command Center operational authority.
  * Includes canonical 'command_center' as well as PRD legacy roles 'admin' and 'officer'.
  */
@@ -80,6 +87,10 @@ export function getHomeRouteForUser(user: User | null | undefined): string {
     return '/login';
   }
 
+  if (isAdminRole(user.role)) {
+    return '/admin';
+  }
+
   if (isCitizenRole(user.role)) {
     return '/citizen';
   }
@@ -96,6 +107,54 @@ export function getHomeRouteForUser(user: User | null | undefined): string {
 }
 
 /**
+ * Resolves a safe, role-authorized redirect destination after authentication.
+ * If the user was trying to access a specific protected section they are authorized for,
+ * preserves that path. Otherwise, cleanly routes them to their primary home portal.
+ * Strictly prevents redirecting authenticated users back to '/', '/login', '/signup', or unauthorized portals.
+ */
+export function getSafeRedirectForUser(
+  user: User | null | undefined,
+  fromPath?: string | null
+): string {
+  if (!user) {
+    return '/login';
+  }
+
+  const homeRoute = getHomeRouteForUser(user);
+
+  if (!fromPath || fromPath === '/' || fromPath === '/login' || fromPath === '/signup') {
+    return homeRoute;
+  }
+
+  // Authorize admin destinations
+  if (fromPath.startsWith('/admin')) {
+    return isAdminRole(user.role) ? fromPath : homeRoute;
+  }
+
+  // Authorize citizen destinations
+  if (fromPath.startsWith('/citizen')) {
+    return isCitizenRole(user.role) ? fromPath : homeRoute;
+  }
+
+  // Authorize command center destinations
+  if (fromPath.startsWith('/command')) {
+    return isCommandCenterRole(user.role) ? fromPath : homeRoute;
+  }
+
+  // Authorize department destinations
+  if (fromPath.startsWith('/department')) {
+    return isDepartmentRole(user.role) ? fromPath : homeRoute;
+  }
+
+  // Authorize public operational views like dashboard and report
+  if (fromPath.startsWith('/dashboard') || fromPath.startsWith('/report')) {
+    return fromPath;
+  }
+
+  return homeRoute;
+}
+
+/**
  * Returns human-friendly formatted role title.
  */
 export function getRoleBadgeLabel(role: UserRole): string {
@@ -105,7 +164,7 @@ export function getRoleBadgeLabel(role: UserRole): string {
     case 'command_center':
       return 'Command Center Officer';
     case 'admin':
-      return 'Administrator (Command Center)';
+      return 'System Administrator';
     case 'officer':
       return 'District Officer (Command Center)';
     case 'department':

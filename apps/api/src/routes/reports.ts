@@ -7,7 +7,19 @@ import { rateLimiter } from '../middleware/rate-limit';
 export const reportRouter = Router();
 
 // Roles permitted to view sensitive citizen contact details
-const OPERATIONAL_ROLES = ['command_center', 'department', 'admin', 'officer', 'coordinator', 'team_lead'];
+export const OPERATIONAL_ROLES = ['command_center', 'department', 'admin', 'officer', 'coordinator', 'team_lead'];
+
+/**
+ * Redacts citizen contact information for public, anonymous, or unauthenticated citizen callers.
+ * Only authenticated operational responders (Health, Supply, Rescue, Command Center, Admin) receive plaintext contact numbers.
+ */
+export function redactContactNumber(
+  contactNumber: string | null | undefined,
+  user?: { role?: string } | null
+): string | null {
+  const isOperational = user?.role ? OPERATIONAL_ROLES.includes(user.role) : false;
+  return isOperational ? (contactNumber || null) : null;
+}
 
 const listReportsQuerySchema = z.object({
   disaster_id: z.string().optional(),
@@ -125,9 +137,6 @@ reportRouter.get('/', optionalAuth, async (req: Request, res: Response) => {
       params
     );
 
-    // Only operational responders can view citizen contact numbers (privacy protection)
-    const isOperational = req.user ? OPERATIONAL_ROLES.includes(req.user.role) : false;
-
     const items = dataRes.rows.map((r) => ({
       id: r.id,
       disaster_id: r.disaster_id,
@@ -144,7 +153,7 @@ reportRouter.get('/', optionalAuth, async (req: Request, res: Response) => {
       confidence: r.confidence,
       is_simulated: r.is_simulated,
       status: r.status,
-      contact_number: isOperational ? r.contact_number : null,
+      contact_number: redactContactNumber(r.contact_number, req.user),
       created_at: r.created_at,
     }));
 
@@ -272,7 +281,7 @@ reportRouter.post('/', rateLimiter(60000, 30), optionalAuth, async (req: Request
       confidence: created.confidence,
       is_simulated: created.is_simulated,
       status: created.status,
-      contact_number: created.contact_number,
+      contact_number: created.contact_number || null,
       created_at: created.created_at,
     });
   } catch (err: unknown) {
@@ -305,9 +314,9 @@ reportRouter.post(
         const id = `rep-bulk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
         await query(
           `INSERT INTO reports (
-            id, disaster_id, user_id, location, location_name, description, severity, category, people_affected, medical_need, confidence, is_simulated, status
+            id, disaster_id, user_id, location, location_name, description, severity, category, people_affected, medical_need, confidence, is_simulated, status, contact_number
           ) VALUES (
-            $1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, $7, $8, $9, $10, $11, 1.00, $12, 'pending_ai'
+            $1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, $7, $8, $9, $10, $11, 1.00, $12, 'pending_ai', $13
           )`,
           [
             id,
@@ -322,12 +331,13 @@ reportRouter.post(
             r.people_affected || null,
             r.medical_need,
             r.is_simulated,
+            r.contact_number || null,
           ]
         );
         insertedIds.push(id);
       }
 
-      // Record in audit log
+      // Record in audit log without sensitive personal data
       try {
         await query(
           `INSERT INTO audit_log (user_id, action, details) VALUES ($1, $2, $3)`,
@@ -392,7 +402,6 @@ reportRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
       return res.status(404).json({ error: `Report with ID '${id}' not found` });
     }
 
-    const isOperational = req.user ? OPERATIONAL_ROLES.includes(req.user.role) : false;
     const r = resDb.rows[0];
 
     return res.status(200).json({
@@ -411,7 +420,7 @@ reportRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
       confidence: r.confidence,
       is_simulated: r.is_simulated,
       status: r.status,
-      contact_number: isOperational ? r.contact_number : null,
+      contact_number: redactContactNumber(r.contact_number, req.user),
       created_at: r.created_at,
     });
   } catch (err: unknown) {

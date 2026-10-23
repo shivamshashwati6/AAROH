@@ -6,6 +6,7 @@ import {
   runWhatIfSimulation,
   SimulationValidationError,
 } from '../services/simulation';
+import { promoteSimulationToDraft, PlanLifecycleError } from '../services/plans';
 import { UserRole } from '@relief-os/shared';
 
 export const simulationRouter = Router();
@@ -154,6 +155,90 @@ simulationRouter.get(
     } catch (err: unknown) {
       console.error(`[API Simulation Run Get Error ${id}]:`, err instanceof Error ? err.message : err);
       return res.status(500).json({ error: 'Failed to retrieve simulation run from database' });
+    }
+  }
+);
+
+// -----------------------------------------------------------------------------
+// POST /api/simulation/runs/:id/promote & POST /api/simulation/promote - Promote to Draft Plan
+// -----------------------------------------------------------------------------
+const promoteRunBodySchema = z.object({
+  zone_id: z.string().optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+simulationRouter.post(
+  '/runs/:id/promote',
+  requireAuth,
+  requireRole(SIMULATION_ROLES),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const parsed = promoteRunBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid promotion parameters',
+        details: parsed.error.issues,
+      });
+    }
+
+    try {
+      const draftPlan = await promoteSimulationToDraft(
+        { simulation_id: id, ...parsed.data },
+        { id: req.user!.id, name: req.user!.name, role: req.user!.role }
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: `Simulation #${id} successfully promoted to DRAFT response plan #${draftPlan.id}. Zero inventory deducted.`,
+        recommendation: draftPlan,
+      });
+    } catch (err: unknown) {
+      if (err instanceof PlanLifecycleError) {
+        return res.status(err.status).json({ error: err.message, code: err.code });
+      }
+      console.error(`[API Simulation Run Promote Error ${id}]:`, err instanceof Error ? err.message : err);
+      return res.status(500).json({ error: 'Failed to promote simulation run to draft plan' });
+    }
+  }
+);
+
+const promoteBodySchema = z.object({
+  simulation_id: z.string().min(1, 'Simulation ID is required'),
+  zone_id: z.string().optional(),
+  notes: z.string().max(1000).optional(),
+});
+
+simulationRouter.post(
+  '/promote',
+  requireAuth,
+  requireRole(SIMULATION_ROLES),
+  async (req: Request, res: Response) => {
+    const parsed = promoteBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid promotion payload',
+        details: parsed.error.issues,
+      });
+    }
+
+    try {
+      const draftPlan = await promoteSimulationToDraft(parsed.data, {
+        id: req.user!.id,
+        name: req.user!.name,
+        role: req.user!.role,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: `Simulation #${parsed.data.simulation_id} successfully promoted to DRAFT response plan #${draftPlan.id}. Zero inventory deducted.`,
+        recommendation: draftPlan,
+      });
+    } catch (err: unknown) {
+      if (err instanceof PlanLifecycleError) {
+        return res.status(err.status).json({ error: err.message, code: err.code });
+      }
+      console.error('[API Simulation Promote Error]:', err instanceof Error ? err.message : err);
+      return res.status(500).json({ error: 'Failed to promote simulation to draft plan' });
     }
   }
 );

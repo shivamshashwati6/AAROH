@@ -15,8 +15,20 @@ import {
   ZoneDemandResult,
   ZoneAllocationResult,
   User,
+  UserRole,
+  DepartmentType,
   AuthResponse,
   Disaster,
+  PriorityWeights,
+  PriorityWeightsPercentages,
+  PrioritySettingsResponse,
+  SystemSettingsResponse,
+  ResponsePlanStatus,
+  ModifyPlanPayload,
+  DispatchPlanPayload,
+  FailPlanPayload,
+  ReallocatePlanPayload,
+  PromoteSimulationPayload,
 } from '@relief-os/shared';
 import { safeStorage } from '../utils/storage';
 import { AUTH_TOKEN_KEY, AUTH_USER_KEY } from '../utils/auth-roles';
@@ -520,6 +532,113 @@ export const api = {
     return handleResponse(res);
   },
 
+  /** Modify response plan before approval */
+  async modifyRecommendation(
+    id: string,
+    payload: ModifyPlanPayload
+  ): Promise<{ success: boolean; message: string; recommendation: RecommendationItem }> {
+    const res = await fetch(`${API_BASE_URL}/recommendations/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  /** Dispatch / execute approved response plan with transactional stock deduction */
+  async dispatchRecommendation(
+    id: string,
+    payload?: DispatchPlanPayload
+  ): Promise<{
+    success: boolean;
+    message: string;
+    recommendation: RecommendationItem;
+    deductions?: Array<{ resource_type: string; quantity_deducted: number; remaining_stock: number }>;
+    already_dispatched?: boolean;
+  }> {
+    const res = await fetch(`${API_BASE_URL}/recommendations/${encodeURIComponent(id)}/dispatch`, {
+      method: 'POST',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload || {}),
+    });
+    return handleResponse(res);
+  },
+
+  /** Mark an in-transit response plan as delivered */
+  async deliverRecommendation(
+    id: string,
+    notes?: string
+  ): Promise<{ success: boolean; message: string; recommendation: RecommendationItem }> {
+    const res = await fetch(`${API_BASE_URL}/recommendations/${encodeURIComponent(id)}/deliver`, {
+      method: 'POST',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ notes }),
+    });
+    return handleResponse(res);
+  },
+
+  /** Mark an in-transit response plan as failed with audited disposition */
+  async failRecommendation(
+    id: string,
+    payload: FailPlanPayload
+  ): Promise<{ success: boolean; message: string; recommendation: RecommendationItem }> {
+    const res = await fetch(`${API_BASE_URL}/recommendations/${encodeURIComponent(id)}/fail`, {
+      method: 'POST',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  /** Draft a new response plan reallocating resources following a failed delivery */
+  async reallocateRecommendation(
+    id: string,
+    payload?: ReallocatePlanPayload
+  ): Promise<{ success: boolean; message: string; plan: RecommendationItem }> {
+    const res = await fetch(`${API_BASE_URL}/recommendations/${encodeURIComponent(id)}/reallocate`, {
+      method: 'POST',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload || {}),
+    });
+    return handleResponse(res);
+  },
+
+  /** Promote a simulation run into a draft response plan without operational side-effects */
+  async promoteSimulation(
+    simulationId?: string,
+    payload?: PromoteSimulationPayload
+  ): Promise<{ success: boolean; message: string; recommendation: RecommendationItem }> {
+    const url = simulationId
+      ? `${API_BASE_URL}/simulation/runs/${encodeURIComponent(simulationId)}/promote`
+      : `${API_BASE_URL}/simulation/promote`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload || (simulationId ? { simulation_id: simulationId } : {})),
+    });
+    return handleResponse(res);
+  },
+
+  // Aliases matching plan terminology
+  modifyPlan(id: string, payload: ModifyPlanPayload) {
+    return api.modifyRecommendation(id, payload);
+  },
+  dispatchPlan(id: string, payload?: DispatchPlanPayload) {
+    return api.dispatchRecommendation(id, payload);
+  },
+  deliverPlan(id: string, notes?: string) {
+    return api.deliverRecommendation(id, notes);
+  },
+  failPlan(id: string, payload: FailPlanPayload) {
+    return api.failRecommendation(id, payload);
+  },
+  reallocatePlan(id: string, payload?: ReallocatePlanPayload) {
+    return api.reallocateRecommendation(id, payload);
+  },
+  promoteSimulationToDraft(simulationId?: string, payload?: PromoteSimulationPayload) {
+    return api.promoteSimulation(simulationId, payload);
+  },
+
   /** Execute What-If constraint simulation (PRD Module 9) */
   async runSimulation(payload: SimulationPayload): Promise<SimulationRunResponse> {
     const res = await fetch(`${API_BASE_URL}/simulation/run`, {
@@ -541,6 +660,98 @@ export const api = {
     });
     return handleResponse<PaginatedResult<any>>(res);
   },
+
+  /** Retrieve Admin system overview & metrics */
+  async getAdminOverview(): Promise<AdminSystemOverview> {
+    const res = await fetch(`${API_BASE_URL}/admin/overview`, {
+      headers: getRequestHeaders(),
+    });
+    return handleResponse<AdminSystemOverview>(res);
+  },
+
+  /** Retrieve full sanitized user directory */
+  async getAdminUsers(): Promise<{ items: AdminUserItem[]; total: number }> {
+    const res = await fetch(`${API_BASE_URL}/admin/users`, {
+      headers: getRequestHeaders(),
+    });
+    return handleResponse<{ items: AdminUserItem[]; total: number }>(res);
+  },
+
+  /** Update user role & department assignment */
+  async updateUserRole(
+    userId: string,
+    payload: { role: UserRole; department?: DepartmentType | null }
+  ): Promise<{ message: string; user: AdminUserItem }> {
+    const res = await fetch(`${API_BASE_URL}/admin/users/${userId}/role`, {
+      method: 'PATCH',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<{ message: string; user: AdminUserItem }>(res);
+  },
+
+  /** Provision an authorized responder or administrator */
+  async createAdminUser(payload: {
+    name: string;
+    email: string;
+    password: string;
+    role: UserRole;
+    department?: DepartmentType | null;
+  }): Promise<{ message: string; user: AdminUserItem }> {
+    const res = await fetch(`${API_BASE_URL}/admin/users`, {
+      method: 'POST',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<{ message: string; user: AdminUserItem }>(res);
+  },
+
+  /** Retrieve currently active priority scoring weights */
+  async getPriorityWeights(): Promise<PrioritySettingsResponse> {
+    const res = await fetch(`${API_BASE_URL}/settings/weights`, {
+      headers: getRequestHeaders(),
+    });
+    return handleResponse<PrioritySettingsResponse>(res);
+  },
+
+  /** Update priority scoring weights (Admin-only) */
+  async updatePriorityWeights(weights: PriorityWeights): Promise<{
+    message: string;
+    weights: PriorityWeights;
+    percentages: PriorityWeightsPercentages;
+    is_default: boolean;
+    updated_at: string;
+  }> {
+    const res = await fetch(`${API_BASE_URL}/settings/weights`, {
+      method: 'PUT',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(weights),
+    });
+    return handleResponse(res);
+  },
+
+  /** Reset priority scoring weights to canonical defaults (Admin-only) */
+  async resetPriorityWeights(): Promise<{
+    message: string;
+    weights: PriorityWeights;
+    percentages: PriorityWeightsPercentages;
+    is_default: boolean;
+    updated_at: string;
+  }> {
+    const res = await fetch(`${API_BASE_URL}/settings/weights/reset`, {
+      method: 'POST',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+    });
+    return handleResponse(res);
+  },
+
+  /** Retrieve full system settings (Weights & Demand Configuration) */
+  async getSystemSettings(): Promise<SystemSettingsResponse> {
+    const res = await fetch(`${API_BASE_URL}/settings`, {
+      headers: getRequestHeaders(),
+    });
+    return handleResponse<SystemSettingsResponse>(res);
+  },
 };
 
 export interface RecommendationItem {
@@ -551,9 +762,17 @@ export interface RecommendationItem {
   approved_by?: string | null;
   approver_name?: string | null;
   approved_at?: string | null;
-  status: 'draft' | 'approved' | 'modified' | 'rejected';
+  dispatched_by?: string | null;
+  dispatched_at?: string | null;
+  completed_at?: string | null;
+  failure_reason?: string | null;
+  execution_notes?: string | null;
+  source_simulation_id?: string | null;
+  status: ResponsePlanStatus;
   created_at: string;
 }
+
+export type { ResponsePlanStatus };
 
 export interface ResourceInventoryItem {
   id: string;
@@ -642,6 +861,72 @@ export interface SimulationRunResponse {
   is_simulated: true;
   persisted: boolean;
   disclaimer: string;
+  created_at: string;
+}
+
+export interface AdminSystemOverview {
+  system: {
+    active_disaster_scenario: string;
+    database_engine: string;
+    human_in_the_loop_governance: boolean;
+    autonomous_dispatch_allowed: boolean;
+  };
+  users_summary: {
+    total: number;
+    citizens: number;
+    admins: number;
+    command_staff: number;
+    department_staff: number;
+    by_department: {
+      health: number;
+      supply: number;
+      rescue: number;
+    };
+  };
+  reports_summary: {
+    total: number;
+    by_status: {
+      pending_ai: number;
+      analyzed: number;
+      verified: number;
+    };
+    by_severity: {
+      critical: number;
+      high: number;
+      medium: number;
+      low: number;
+    };
+    medical_urgency_count: number;
+  };
+  departments_overview: {
+    health: {
+      medical_teams_available: number;
+      medical_distress_reports: number;
+      resource_centers_monitored: number;
+    };
+    supply: {
+      food_kits_inventory: number;
+      water_units_inventory: number;
+      active_warehouses: number;
+    };
+    rescue: {
+      total_fleet: number;
+      vehicles_available: number;
+      boats_available: number;
+      blocked_roads: number;
+      partial_roads: number;
+      accessible_roads: number;
+      rescue_priority_reports: number;
+    };
+  };
+}
+
+export interface AdminUserItem {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  department: DepartmentType | null;
   created_at: string;
 }
 

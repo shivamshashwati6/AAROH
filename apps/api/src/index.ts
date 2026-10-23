@@ -13,6 +13,10 @@ if (fs.existsSync(rootEnvPath)) {
 }
 
 import { checkDbStatus } from './db';
+import { validateJwtConfigAtStartup } from './services/auth';
+
+// Fail securely on startup if production environment has missing or weak JWT secret
+validateJwtConfigAtStartup();
 import { disasterRouter } from './routes/disasters';
 import { zoneRouter } from './routes/zones';
 import { shelterRouter } from './routes/shelters';
@@ -22,6 +26,8 @@ import { roadSegmentRouter } from './routes/road-segments';
 import { authRouter } from './routes/auth';
 import { recommendationRouter } from './routes/recommendations';
 import { simulationRouter } from './routes/simulations';
+import { adminRouter } from './routes/admin';
+import { settingsRouter } from './routes/settings';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -62,6 +68,8 @@ app.use('/api/recommendations', recommendationRouter);
 app.use('/api/plans', recommendationRouter); // PRD API alias (POST /api/plans/:id/approve, etc.)
 app.use('/api/simulation', simulationRouter);
 app.use('/api/simulations', simulationRouter); // PRD Module 9 alias
+app.use('/api/admin', adminRouter);
+app.use('/api/settings', settingsRouter);
 
 
 // -----------------------------------------------------------------------------

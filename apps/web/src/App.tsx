@@ -9,6 +9,7 @@ import { CommandCenterPage } from './pages/CommandCenterPage';
 import { DepartmentPage } from './pages/DepartmentPage';
 import { PublicReportPage } from './pages/PublicReportPage';
 import { LegacyDashboardPage } from './pages/LegacyDashboardPage';
+import { AdminPage } from './pages/AdminPage';
 import { getHomeRouteForUser } from './utils/auth-roles';
 import { Loader2 } from 'lucide-react';
 
@@ -80,6 +81,16 @@ export function App() {
             element={
               <ProtectedRoute allowedRoles={['department', 'coordinator', 'team_lead']}>
                 <DepartmentPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Route: System Administration & Governance */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminPage />
               </ProtectedRoute>
             }
           />

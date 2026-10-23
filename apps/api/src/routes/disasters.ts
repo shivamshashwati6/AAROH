@@ -85,9 +85,13 @@ disasterRouter.get('/', async (req: Request, res: Response) => {
 // -----------------------------------------------------------------------------
 disasterRouter.get('/demo-kpis', async (_req: Request, res: Response) => {
   try {
-    // 1. Fetch active canonical disaster
+    // 1. Fetch active canonical disaster (prioritizing canonical disaster-assam-2026)
     const disasterRes = await query(
-      `SELECT id, name, type, region, status, is_simulated FROM disasters WHERE id = 'disaster-assam-2026' OR is_simulated = true LIMIT 1`
+      `SELECT id, name, type, region, status, is_simulated 
+       FROM disasters 
+       WHERE id = 'disaster-assam-2026' OR is_simulated = true 
+       ORDER BY CASE WHEN id = 'disaster-assam-2026' THEN 0 ELSE 1 END, created_at ASC 
+       LIMIT 1`
     );
     const disaster = disasterRes.rows[0] || {
       id: 'disaster-assam-2026',
@@ -96,12 +100,12 @@ disasterRouter.get('/demo-kpis', async (_req: Request, res: Response) => {
       is_simulated: true,
     };
 
-    // 2. Aggregate metrics from database
+    // 2. Aggregate metrics from database (with fallback to global zone counts for canonical fidelity)
     const kpiRes = await query(`
       SELECT
         (SELECT count(*) FROM disasters WHERE status = 'active') as active_disasters,
-        (SELECT coalesce(sum(affected_population), 0) FROM zones WHERE disaster_id = $1) as affected_population,
-        (SELECT count(*) FROM zones WHERE disaster_id = $1 AND band = 'Critical') as critical_zones,
+        (SELECT coalesce(nullif(sum(affected_population), 0), (SELECT sum(affected_population) FROM zones), 0) FROM zones WHERE disaster_id = $1) as affected_population,
+        (SELECT coalesce(nullif(count(*), 0), (SELECT count(*) FROM zones WHERE band = 'Critical'), 0) FROM zones WHERE disaster_id = $1 AND band = 'Critical') as critical_zones,
         (SELECT count(*) FROM shelters) as shelters_count,
         (SELECT round(coalesce(sum(occupied)::numeric / nullif(sum(capacity), 0)::numeric * 100, 0)) FROM shelters) as shelter_occupancy_pct,
         (SELECT count(*) FROM resource_centers) as relief_centers_count,

@@ -56,6 +56,32 @@ export function NavigationHeader() {
             <span>Live Map / Demo</span>
           </Link>
 
+          {/* Authenticated Portal Link */}
+          {isAuthenticated && user && (
+            <Link
+              to={
+                user.role === 'admin'
+                  ? '/admin'
+                  : user.role === 'citizen'
+                  ? '/citizen'
+                  : user.role === 'department' || user.role === 'coordinator' || user.role === 'team_lead'
+                  ? '/department'
+                  : '/command'
+              }
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-700/60 text-cyan-300 text-xs font-semibold transition"
+            >
+              <span>
+                {user.role === 'admin'
+                  ? 'Admin Portal'
+                  : user.role === 'citizen'
+                  ? 'Citizen Portal'
+                  : user.role === 'department' || user.role === 'coordinator' || user.role === 'team_lead'
+                  ? 'Department Portal'
+                  : 'Command Center'}
+              </span>
+            </Link>
+          )}
+
           {isAuthenticated && user ? (
             <div className="flex items-center gap-3 pl-2 sm:pl-3 border-l border-[#1f2e48]">
               {/* User details & badges */}

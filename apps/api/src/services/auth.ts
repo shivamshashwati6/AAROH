@@ -20,19 +20,56 @@ export interface TokenPayload {
 
 const SALT_ROUNDS = 10;
 
+// Explicitly documented development & local testing fallback secret (DO NOT USE IN PRODUCTION)
+const DEV_ONLY_TESTING_SECRET = 'relief_os_jwt_secret_dev_2026_9b8c2d1e4f3a7650821b0dc3729e41';
+
 /**
- * Returns the JWT secret from environment configuration.
- * Fails safely if missing; never uses a hardcoded production fallback.
+ * Validates JWT configuration at server startup.
+ * Throws a fatal security error if production lacks an explicit, strong JWT_SECRET.
+ */
+export function validateJwtConfigAtStartup(): void {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secret = process.env.JWT_SECRET?.trim();
+
+  if (isProduction) {
+    if (!secret || secret.length === 0) {
+      throw new Error(
+        '[FATAL SECURITY CONFIGURATION ERROR] JWT_SECRET must be explicitly set in production. Startup aborted.'
+      );
+    }
+    if (secret === 'dev-secret' || secret === DEV_ONLY_TESTING_SECRET || secret.length < 32) {
+      throw new Error(
+        '[FATAL SECURITY CONFIGURATION ERROR] Insecure or default JWT_SECRET detected in production. Minimum 32 characters required. Startup aborted.'
+      );
+    }
+  }
+}
+
+/**
+ * Returns the active JWT secret.
+ * Enforces production safety; allows safe explicitly documented testing secret in dev/test.
  */
 export function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (!secret || secret.trim().length === 0) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secret = process.env.JWT_SECRET?.trim();
+
+  if (!secret || secret.length === 0) {
     throw new AuthError(
       'JWT_SECRET_MISSING',
-      'JWT_SECRET environment variable is not configured. Server cannot sign or verify tokens.'
+      'JWT_SECRET environment variable is not configured.'
     );
   }
-  return secret.trim();
+
+  if (isProduction) {
+    if (secret === 'dev-secret' || secret === DEV_ONLY_TESTING_SECRET || secret.length < 32) {
+      throw new AuthError(
+        'JWT_SECRET_INSECURE',
+        'Insecure JWT_SECRET configured in production. Must be at least 32 characters.'
+      );
+    }
+  }
+
+  return secret;
 }
 
 /**

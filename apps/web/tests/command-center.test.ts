@@ -40,14 +40,14 @@ describe('RELIEF-OS Command Center Dashboard Integration & Data Tests', () => {
       assert.equal(isRoleAuthorized('team_lead', allowedCommandRoles), false);
     });
 
-    it('should route command personnel directly to /command', () => {
+    it('should route command personnel directly to /command and admin to /admin', () => {
       const cmdUser: User = { id: 'usr-c1', name: 'Commander', email: 'cmd@relief.org', role: 'command_center' };
       const officerUser: User = { id: 'usr-o1', name: 'Officer', email: 'officer@relief.org', role: 'officer' };
       const adminUser: User = { id: 'usr-a1', name: 'Admin', email: 'admin@relief.org', role: 'admin' };
 
       assert.equal(getHomeRouteForUser(cmdUser), '/command');
       assert.equal(getHomeRouteForUser(officerUser), '/command');
-      assert.equal(getHomeRouteForUser(adminUser), '/command');
+      assert.equal(getHomeRouteForUser(adminUser), '/admin');
     });
 
     it('should route citizen away to /citizen and not /command', () => {

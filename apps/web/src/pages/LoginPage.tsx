@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getHomeRouteForUser } from '../utils/auth-roles';
+import { getSafeRedirectForUser } from '../utils/auth-roles';
 import {
   ShieldAlert,
   Lock,
@@ -27,12 +27,11 @@ export function LoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // If already authenticated, redirect to designated workspace
+  // If already authenticated, redirect to role-authorized destination
   useEffect(() => {
     if (isAuthenticated && user) {
       const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
-      const destination = fromPath && fromPath !== '/login' ? fromPath : getHomeRouteForUser(user);
-      navigate(destination, { replace: true });
+      navigate(getSafeRedirectForUser(user, fromPath), { replace: true });
     }
   }, [isAuthenticated, user, navigate, location.state]);
 
@@ -55,8 +54,7 @@ export function LoginPage() {
     try {
       const loggedInUser = await login(trimmedEmail, password);
       const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
-      const destination = fromPath && fromPath !== '/login' ? fromPath : getHomeRouteForUser(loggedInUser);
-      navigate(destination, { replace: true });
+      navigate(getSafeRedirectForUser(loggedInUser, fromPath), { replace: true });
     } catch {
       // Error is stored in auth context
     } finally {
@@ -103,10 +101,10 @@ export function LoginPage() {
             </Link>
             <h1 className="text-2xl font-black tracking-tight text-white">RELIEF-OS</h1>
             <p className="text-xs text-cyan-300 font-medium mt-0.5">
-              Secure Workspace Authentication
+              Account Sign In
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Sign in to access your role-authorized emergency operations portal.
+              Sign in to access your role-authorized emergency operations portal or citizen dashboard.
             </p>
           </div>
 
@@ -128,7 +126,7 @@ export function LoginPage() {
                 htmlFor="login-email"
                 className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider"
               >
-                Work Email Address
+                Email Address
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
@@ -140,7 +138,7 @@ export function LoginPage() {
                     setEmail(e.target.value);
                     if (formError) setFormError(null);
                   }}
-                  placeholder="name@relief.internal"
+                  placeholder="e.g. citizen@gmail.com or name@relief.internal"
                   autoComplete="email"
                   required
                   className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
@@ -193,7 +191,7 @@ export function LoginPage() {
                 </>
               ) : (
                 <>
-                  <span>Sign In to Workspace</span>
+                  <span>Sign In</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -213,7 +211,7 @@ export function LoginPage() {
             <div className="flex items-start gap-2 bg-[#131e31]/70 p-3 rounded-lg border border-[#1f2e48] text-left">
               <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                <span className="font-semibold text-slate-300">Command Center, Admin &amp; Department Accounts:</span> Privileged operational roles are provisioned by disaster administration and cannot be created via public registration.
+                <span className="font-semibold text-slate-300">Unified Role Access:</span> Existing citizens, command staff, administrators, and department personnel sign in using their registered email and password. Official operational roles are provisioned by disaster administration.
               </p>
             </div>
           </div>

@@ -7,6 +7,7 @@ async function seedDemoUsers() {
     const hash = await bcrypt.hash('Password123!', 10);
     const users = [
       { id: 'usr-citizen-demo', name: 'Rupjyoti Das', email: 'citizen@relief.internal', role: 'citizen', department: null },
+      { id: 'usr-admin-demo', name: 'RELIEF-OS Lead Administrator', email: 'admin@relief.internal', role: 'admin', department: null },
       { id: 'usr-command-demo', name: 'Operations Commander Barua', email: 'command@relief.internal', role: 'command_center', department: null },
       { id: 'usr-health-demo', name: 'Dr. Saikia (Health Lead)', email: 'health@relief.internal', role: 'department', department: 'health' },
       { id: 'usr-supply-demo', name: 'Supply Officer Hazarika', email: 'supply@relief.internal', role: 'department', department: 'supply' },

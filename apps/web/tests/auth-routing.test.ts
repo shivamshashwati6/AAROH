@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isCitizenRole,
+  isAdminRole,
   isCommandCenterRole,
   isDepartmentRole,
   isRoleAuthorized,
@@ -158,18 +159,23 @@ describe('RELIEF-OS Frontend Role-Based Routing & Authorization Tests', () => {
       assert.equal(getHomeRouteForUser(citizenUser), '/citizen');
     });
 
-    it('should route command_center, admin, and officer accounts to /command', () => {
-      const cmdUser: User = {
-        id: 'usr-2',
-        name: 'Command User',
-        email: 'cmd@relief-os.org',
-        role: 'command_center',
-      };
+    it('should route admin accounts to /admin', () => {
       const adminUser: User = {
         id: 'usr-3',
         name: 'Admin User',
         email: 'admin@relief-os.org',
         role: 'admin',
+      };
+      assert.equal(isAdminRole(adminUser.role), true);
+      assert.equal(getHomeRouteForUser(adminUser), '/admin');
+    });
+
+    it('should route command_center and officer accounts to /command', () => {
+      const cmdUser: User = {
+        id: 'usr-2',
+        name: 'Command User',
+        email: 'cmd@relief-os.org',
+        role: 'command_center',
       };
       const officerUser: User = {
         id: 'usr-4',
@@ -179,7 +185,6 @@ describe('RELIEF-OS Frontend Role-Based Routing & Authorization Tests', () => {
       };
 
       assert.equal(getHomeRouteForUser(cmdUser), '/command');
-      assert.equal(getHomeRouteForUser(adminUser), '/command');
       assert.equal(getHomeRouteForUser(officerUser), '/command');
     });
 
@@ -233,7 +238,7 @@ describe('RELIEF-OS Frontend Role-Based Routing & Authorization Tests', () => {
     it('should format role badge titles accurately', () => {
       assert.equal(getRoleBadgeLabel('citizen'), 'Citizen');
       assert.equal(getRoleBadgeLabel('command_center'), 'Command Center Officer');
-      assert.equal(getRoleBadgeLabel('admin'), 'Administrator (Command Center)');
+      assert.equal(getRoleBadgeLabel('admin'), 'System Administrator');
       assert.equal(getRoleBadgeLabel('officer'), 'District Officer (Command Center)');
       assert.equal(getRoleBadgeLabel('department'), 'Department Personnel');
       assert.equal(getRoleBadgeLabel('coordinator'), 'Relief Coordinator (Department)');
