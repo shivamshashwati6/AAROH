@@ -122,7 +122,14 @@ export function getSafeRedirectForUser(
 
   const homeRoute = getHomeRouteForUser(user);
 
-  if (!fromPath || fromPath === '/' || fromPath === '/login' || fromPath === '/signup') {
+  if (
+    !fromPath ||
+    fromPath === '/' ||
+    fromPath === '/login' ||
+    fromPath === '/signup' ||
+    fromPath.includes('/login') ||
+    fromPath.includes('/signup')
+  ) {
     return homeRoute;
   }
 

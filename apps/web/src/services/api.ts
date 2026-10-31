@@ -30,6 +30,7 @@ import {
   ReallocatePlanPayload,
   PromoteSimulationPayload,
 } from '@relief-os/shared';
+export type { CitizenReport };
 import { safeStorage } from '../utils/storage';
 import { AUTH_TOKEN_KEY, AUTH_USER_KEY } from '../utils/auth-roles';
 
@@ -361,6 +362,25 @@ export const api = {
     return handleResponse<ZoneAllocationResult>(res);
   },
 
+  /** Generate a new draft response plan for a zone */
+  async generateZonePlan(
+    id: string,
+    payload?: { planning_days?: number; notes?: string }
+  ): Promise<{
+    success: boolean;
+    message: string;
+    recommendation: RecommendationItem;
+    plan: any;
+    explanation: string;
+  }> {
+    const res = await fetch(`${API_BASE_URL}/zones/${encodeURIComponent(id)}/plan`, {
+      method: 'POST',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload || {}),
+    });
+    return handleResponse(res);
+  },
+
   /** Calculate resource demand with custom scenario overrides */
   async postZoneDemand(
     id: string,
@@ -494,6 +514,14 @@ export const api = {
       body: JSON.stringify(payload),
     });
     return handleResponse(res);
+  },
+
+  /** Get single citizen distress report by ID */
+  async getReportById(id: string): Promise<CitizenReport> {
+    const res = await fetch(`${API_BASE_URL}/reports/${encodeURIComponent(id)}`, {
+      headers: getRequestHeaders(),
+    });
+    return handleResponse<CitizenReport>(res);
   },
 
   /** List recommendations / response plans */
@@ -770,6 +798,27 @@ export const api = {
     });
     return handleResponse<SystemSettingsResponse>(res);
   },
+
+  /** Execute AI & rule-based situation analysis on citizen reports for a disaster */
+  async analyzeDisasterSituation(
+    disasterId: string,
+    payload?: { limit?: number; force_reanalyze?: boolean; report_ids?: string[] }
+  ): Promise<SituationAnalysisResult> {
+    const res = await fetch(`${API_BASE_URL}/disasters/${encodeURIComponent(disasterId)}/analyze`, {
+      method: 'POST',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload || {}),
+    });
+    return handleResponse<SituationAnalysisResult>(res);
+  },
+
+  /** Get latest situation analysis overview for a disaster */
+  async getDisasterSituation(disasterId: string): Promise<SituationAnalysisResult> {
+    const res = await fetch(`${API_BASE_URL}/disasters/${encodeURIComponent(disasterId)}/situation`, {
+      headers: getRequestHeaders(),
+    });
+    return handleResponse<SituationAnalysisResult>(res);
+  },
 };
 
 export interface RecommendationItem {
@@ -946,6 +995,49 @@ export interface AdminUserItem {
   role: UserRole;
   department: DepartmentType | null;
   created_at: string;
+}
+
+export interface ReportDuplicateCluster {
+  cluster_id: string;
+  primary_report_id: string;
+  duplicate_report_ids: string[];
+  total_reports: number;
+  confidence: number;
+  reason: string;
+  shared_location: string | null;
+  combined_people_estimate: number;
+  category: string;
+}
+
+export interface SituationAnalysisResult {
+  id: string;
+  disaster_id: string;
+  disaster_name: string;
+  analyzed_by?: string | null;
+  created_at: string;
+  provider: 'gemini-1.5-pro' | 'deterministic_fallback';
+  provider_note?: string;
+  total_reports_analyzed: number;
+  pending_reports_remaining: number;
+  summary: string;
+  reported_facts: string[];
+  inferred_findings: string[];
+  uncertain_information: string[];
+  unresolved_conflicts: string[];
+  categories_breakdown: Record<string, { count: number; percentage: number }>;
+  severity_breakdown: Record<string, number>;
+  urgent_needs: { need: string; count: number }[];
+  high_severity_count: number;
+  clusters: ReportDuplicateCluster[];
+  high_severity_reports?: {
+    id: string;
+    description: string;
+    location_name: string | null;
+    severity: string;
+    category: string;
+    people_affected: number | null;
+    medical_need: boolean;
+  }[];
 }
 
 

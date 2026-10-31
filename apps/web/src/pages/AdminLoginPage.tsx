@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getSafeRedirectForUser } from '../utils/auth-roles';
+import { getSafeRedirectForUser, isAdminRole } from '../utils/auth-roles';
 import {
   ShieldAlert,
   Lock,
@@ -27,9 +27,9 @@ export function AdminLoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // If already authenticated and not loading, redirect to authorized destination
+  // If already authenticated with admin authorization and not loading, redirect to authorized destination
   useEffect(() => {
-    if (!isLoading && isAuthenticated && user) {
+    if (!isLoading && isAuthenticated && user && isAdminRole(user.role)) {
       const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
       navigate(getSafeRedirectForUser(user, fromPath), { replace: true });
     }

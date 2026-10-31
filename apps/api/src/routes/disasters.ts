@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { query } from '../db';
 import { requireAuth, requireRole } from '../middleware/auth';
+import { calculateDisasterShortages } from '../services/allocation';
+import { analyzeDisasterReports, getLatestSituationAnalysis } from '../services/intelligence';
 
 export const disasterRouter = Router();
 
@@ -138,6 +140,9 @@ disasterRouter.get('/demo-kpis', async (_req: Request, res: Response) => {
     const breakdown = hero?.breakdown_json || {};
     const plan = hero?.recommendation_plan || {};
 
+    // Calculate dynamic resource shortages using actual database demand and regional warehouse stock
+    const shortageSummary = await calculateDisasterShortages(disaster.id, { planning_days: 3 });
+
     const responsePayload = {
       disaster_id: disaster.id,
       disaster_name: disaster.name,
@@ -147,7 +152,7 @@ disasterRouter.get('/demo-kpis', async (_req: Request, res: Response) => {
         active_disaster_count: parseInt(kpi.active_disasters || '1', 10),
         affected_population: parseInt(kpi.affected_population || '18420', 10),
         critical_zones_count: parseInt(kpi.critical_zones || '7', 10),
-        resource_shortages_count: 4, // 4 supply categories tracked
+        resource_shortages_count: shortageSummary.shortages_count,
         active_teams_count: parseInt(kpi.medical_teams || '21', 10) > 0 ? parseInt(kpi.medical_teams, 10) : 21,
         shelter_occupancy_pct: parseInt(kpi.shelter_occupancy_pct || '71', 10),
         total_shelters: parseInt(kpi.shelters_count || '18', 10),
@@ -343,4 +348,85 @@ disasterRouter.post(
     }
   }
 );
+
+// -----------------------------------------------------------------------------
+// POST /api/disasters/:id/analyze - AI & Rule-Based Citizen Report Intelligence
+// -----------------------------------------------------------------------------
+const analyzeDisasterBodySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  force_reanalyze: z.boolean().optional(),
+  report_ids: z.array(z.string().min(1)).optional(),
+});
+
+disasterRouter.post(
+  '/:id/analyze',
+  requireAuth,
+  requireRole(['command_center', 'officer', 'admin']),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const parsed = analyzeDisasterBodySchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Invalid analysis request payload',
+        details: parsed.error.issues,
+      });
+    }
+
+    try {
+      const result = await analyzeDisasterReports(id, {
+        limit: parsed.data.limit,
+        force_reanalyze: parsed.data.force_reanalyze,
+        report_ids: parsed.data.report_ids,
+        user: req.user
+          ? { id: req.user.id, role: req.user.role, name: req.user.name }
+          : undefined,
+      });
+
+      return res.status(200).json(result);
+    } catch (err: unknown) {
+      if ((err as any)?.status === 404) {
+        return res.status(404).json({ error: (err as Error).message });
+      }
+      console.error(`[API Disaster Analysis Error ${id}]:`, err instanceof Error ? err.message : err);
+      return res.status(500).json({
+        error: 'Failed to execute disaster report situation analysis',
+        message: err instanceof Error ? err.message : 'Internal analysis error',
+      });
+    }
+  }
+);
+
+// -----------------------------------------------------------------------------
+// GET /api/disasters/:id/situation - Retrieve Latest Situation Analysis Overview
+// -----------------------------------------------------------------------------
+disasterRouter.get('/:id/situation', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const analysis = await getLatestSituationAnalysis(id);
+    if (!analysis) {
+      return res.status(200).json({
+        disaster_id: id,
+        status: 'pending_initial_analysis',
+        summary: 'No AI situation analysis has been run yet for this disaster event.',
+        reported_facts: [],
+        inferred_findings: [],
+        uncertain_information: [],
+        unresolved_conflicts: [],
+        categories_breakdown: {},
+        severity_breakdown: {},
+        urgent_needs: [],
+        high_severity_count: 0,
+        total_reports_analyzed: 0,
+        clusters: [],
+      });
+    }
+
+    return res.status(200).json(analysis);
+  } catch (err: unknown) {
+    console.error(`[API Disaster Situation Get Error ${id}]:`, err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: 'Failed to retrieve situation analysis from database' });
+  }
+});
 

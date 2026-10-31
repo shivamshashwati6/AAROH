@@ -166,6 +166,94 @@ describe('RELIEF-OS Frontend Separate Role-Based Login & Auth Routing Tests', ()
       // Verify no session was created
       assert.equal(api.getToken(), null);
     });
+
+    it('should reject login with 401 when password is invalid', async () => {
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({ error: 'Invalid email or password' }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        );
+
+      await assert.rejects(
+        async () => {
+          await api.login({
+            email: 'health@relief.internal',
+            password: 'WrongPassword999!',
+            portal: 'department',
+          });
+        },
+        (err: unknown) => {
+          assert.ok(err instanceof ApiError);
+          assert.equal(err.status, 401);
+          assert.equal(err.message, 'Invalid email or password');
+          return true;
+        }
+      );
+    });
+
+    it('should reject login with 401 when account is nonexistent', async () => {
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({ error: 'Invalid email or password' }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        );
+
+      await assert.rejects(
+        async () => {
+          await api.login({
+            email: 'nonexistent@relief.internal',
+            password: 'Password123!',
+            portal: 'department',
+          });
+        },
+        (err: unknown) => {
+          assert.ok(err instanceof ApiError);
+          assert.equal(err.status, 401);
+          assert.equal(err.message, 'Invalid email or password');
+          return true;
+        }
+      );
+    });
+
+    it('should authenticate health, supply, and rescue department accounts successfully', async () => {
+      const depts: Array<{ email: string; dept: 'health' | 'supply' | 'rescue' }> = [
+        { email: 'health@relief.internal', dept: 'health' },
+        { email: 'supply@relief.internal', dept: 'supply' },
+        { email: 'rescue@relief.internal', dept: 'rescue' },
+      ];
+
+      for (const item of depts) {
+        globalThis.fetch = async (_input, init) => {
+          const body = JSON.parse(String(init?.body));
+          assert.equal(body.email, item.email);
+          assert.equal(body.password, 'Password123!');
+          assert.equal(body.portal, 'department');
+          return new Response(
+            JSON.stringify({
+              user: {
+                id: `usr-${item.dept}-demo`,
+                name: `${item.dept.toUpperCase()} Lead`,
+                email: item.email,
+                role: 'department',
+                department: item.dept,
+              },
+              token: `jwt.${item.dept}.token`,
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        };
+
+        const res = await api.login({
+          email: item.email,
+          password: 'Password123!',
+          portal: 'department',
+        });
+
+        assert.equal(res.user.role, 'department');
+        assert.equal(res.user.department, item.dept);
+        assert.ok(isDepartmentRole(res.user.role));
+      }
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -293,6 +381,7 @@ describe('RELIEF-OS Frontend Separate Role-Based Login & Auth Routing Tests', ()
 
       assert.equal(getHomeRouteForUser(deptUser), '/department');
       assert.equal(getSafeRedirectForUser(deptUser, '/department'), '/department');
+      assert.equal(getSafeRedirectForUser(deptUser, '/department/login'), '/department');
       assert.equal(getSafeRedirectForUser(deptUser, '/admin'), '/department');
     });
 
@@ -306,6 +395,8 @@ describe('RELIEF-OS Frontend Separate Role-Based Login & Auth Routing Tests', ()
 
       assert.equal(getHomeRouteForUser(admin), '/admin');
       assert.equal(getSafeRedirectForUser(admin, '/admin'), '/admin');
+      assert.equal(getSafeRedirectForUser(admin, '/admin/login'), '/admin');
+      assert.equal(getSafeRedirectForUser(admin, '/department/login'), '/admin');
     });
   });
 });

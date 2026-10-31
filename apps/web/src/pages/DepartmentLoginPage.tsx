@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getSafeRedirectForUser } from '../utils/auth-roles';
+import { getSafeRedirectForUser, isDepartmentRole } from '../utils/auth-roles';
 import {
   Warehouse,
   Lock,
@@ -29,13 +29,22 @@ export function DepartmentLoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // If already authenticated and not loading, redirect to authorized destination
+  // Only auto-redirect if explicitly routed here from a protected route with a specific target path
   useEffect(() => {
-    if (!isLoading && isAuthenticated && user) {
+    if (!isLoading && isAuthenticated && user && isDepartmentRole(user.role)) {
       const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
-      navigate(getSafeRedirectForUser(user, fromPath), { replace: true });
+      if (fromPath && !fromPath.includes('/login') && fromPath.startsWith('/department')) {
+        navigate(fromPath, { replace: true });
+      }
     }
   }, [isLoading, isAuthenticated, user, navigate, location.state]);
+
+  const fillDemoAccount = (dept: 'health' | 'supply' | 'rescue') => {
+    setEmail(`${dept}@relief.internal`);
+    setPassword('Password123!');
+    setFormError(null);
+    clearError();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +84,7 @@ export function DepartmentLoginPage() {
       <aside aria-label="Operational notice" className="bg-indigo-950/40 border-b border-indigo-800/40 px-4 py-2.5 text-center text-xs text-indigo-300">
         <div className="max-w-4xl mx-auto flex items-center justify-center gap-2 flex-wrap">
           <Shield className="w-4 h-4 text-indigo-400 shrink-0" />
-          <span>Department Operations &amp; Logistics Gateway &bull; Health, Supply, and Rescue Services</span>
+          <span>Department Operations &bull; Health, Supply, and Rescue Services</span>
         </div>
       </aside>
 
@@ -100,7 +109,7 @@ export function DepartmentLoginPage() {
           </div>
 
           {/* Logo & Platform Header */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-950/50 mx-auto mb-4">
               <Warehouse className="w-8 h-8 text-white" />
             </div>
@@ -109,35 +118,87 @@ export function DepartmentLoginPage() {
               AAROH Logistics &amp; Field Responder Operations
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Authorized access for Health, Supply, and Rescue operational teams.
+              Select your department unit or sign in with assigned credentials.
             </p>
           </div>
 
-          {/* Department Scope Badges */}
-          <div className="grid grid-cols-3 gap-2 mb-6 text-center text-[11px]">
-            <div className="bg-[#131e31] border border-[#1f2e48] rounded-lg p-2 text-slate-300">
-              <HeartPulse className="w-4 h-4 text-red-400 mx-auto mb-1" />
-              <span className="font-semibold block">Health</span>
-              <span className="text-[10px] text-slate-500">Medical Units</span>
+          {/* Active Session Notification */}
+          {isAuthenticated && user && (
+            <div className="mb-5 p-3 rounded-xl bg-indigo-950/50 border border-indigo-700/60 flex items-center justify-between text-xs text-indigo-200">
+              <div className="truncate mr-2">
+                <span className="text-[10px] text-slate-400 block uppercase tracking-wider">Active Session</span>
+                <span className="font-bold text-white">{user.name}</span>
+                <span className="text-slate-400 text-[11px] block">{user.email}</span>
+              </div>
+              <Link
+                to="/department"
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs whitespace-nowrap transition shadow"
+              >
+                Go to Dashboard &rarr;
+              </Link>
             </div>
-            <div className="bg-[#131e31] border border-[#1f2e48] rounded-lg p-2 text-slate-300">
-              <Truck className="w-4 h-4 text-blue-400 mx-auto mb-1" />
-              <span className="font-semibold block">Supply</span>
-              <span className="text-[10px] text-slate-500">Warehouses</span>
+          )}
+
+          {/* Interactive Department Unit Quick-Select Cards */}
+          <div className="grid grid-cols-3 gap-2 mb-3 text-center text-[11px]">
+            <button
+              type="button"
+              onClick={() => fillDemoAccount('health')}
+              className={`p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center cursor-pointer ${
+                email === 'health@relief.internal'
+                  ? 'bg-red-950/50 border-red-500 shadow-md shadow-red-950/50 text-white'
+                  : 'bg-[#131e31] border-[#1f2e48] hover:border-red-500/50 text-slate-300'
+              }`}
+            >
+              <HeartPulse className="w-4 h-4 text-red-400 mb-1" />
+              <span className="font-bold block text-xs">Health</span>
+              <span className="text-[10px] text-slate-400">Medical Units</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => fillDemoAccount('supply')}
+              className={`p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center cursor-pointer ${
+                email === 'supply@relief.internal'
+                  ? 'bg-blue-950/50 border-blue-500 shadow-md shadow-blue-950/50 text-white'
+                  : 'bg-[#131e31] border-[#1f2e48] hover:border-blue-500/50 text-slate-300'
+              }`}
+            >
+              <Truck className="w-4 h-4 text-blue-400 mb-1" />
+              <span className="font-bold block text-xs">Supply</span>
+              <span className="text-[10px] text-slate-400">Warehouses</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => fillDemoAccount('rescue')}
+              className={`p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center cursor-pointer ${
+                email === 'rescue@relief.internal'
+                  ? 'bg-amber-950/50 border-amber-500 shadow-md shadow-amber-950/50 text-white'
+                  : 'bg-[#131e31] border-[#1f2e48] hover:border-amber-500/50 text-slate-300'
+              }`}
+            >
+              <LifeBuoy className="w-4 h-4 text-amber-400 mb-1" />
+              <span className="font-bold block text-xs">Rescue</span>
+              <span className="text-[10px] text-slate-400">Road Status</span>
+            </button>
+          </div>
+
+          {/* Demo Account Credentials Quick Helper */}
+          <div className="mb-4 bg-[#131e31] border border-indigo-500/30 rounded-xl p-2.5 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 text-[11px]">Demo Password:</span>
+              <code className="text-indigo-300 font-mono font-bold text-[11px] bg-indigo-950/80 px-1.5 py-0.5 rounded border border-indigo-800/40">
+                Password123!
+              </code>
             </div>
-            <div className="bg-[#131e31] border border-[#1f2e48] rounded-lg p-2 text-slate-300">
-              <LifeBuoy className="w-4 h-4 text-amber-400 mx-auto mb-1" />
-              <span className="font-semibold block">Rescue</span>
-              <span className="text-[10px] text-slate-500">Road Status</span>
-            </div>
+            <span className="text-[10px] text-indigo-400">Click unit to auto-fill</span>
           </div>
 
           {/* Department Provisioning Notice */}
-          <div className="mb-6 bg-indigo-950/40 border border-indigo-800/50 p-3.5 rounded-xl flex items-start gap-3">
+          <div className="mb-6 bg-indigo-950/40 border border-indigo-800/50 p-3 rounded-xl flex items-start gap-2.5">
             <Shield className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-            <div className="text-xs text-slate-300 leading-relaxed">
+            <div className="text-[11px] text-slate-300 leading-relaxed">
               <span className="font-bold text-white block">Official Provisioning Required</span>
-              Department accounts are securely provisioned by disaster administration. Public citizen registration cannot create department accounts.
+              Department accounts are securely provisioned. Public citizen registration cannot access department operations.
             </div>
           </div>
 
@@ -172,7 +233,7 @@ export function DepartmentLoginPage() {
                     if (formError) setFormError(null);
                   }}
                   placeholder="e.g. health@relief.internal or supply@relief.internal"
-                  autoComplete="email"
+                  autoComplete="off"
                   required
                   className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
                 />
@@ -197,7 +258,7 @@ export function DepartmentLoginPage() {
                     if (formError) setFormError(null);
                   }}
                   placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   required
                   className="w-full bg-[#131e31] border border-[#1f2e48] focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition"
                 />

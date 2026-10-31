@@ -9,6 +9,7 @@ import {
   RecommendationItem,
   SimulationPayload,
   SimulationRunResponse,
+  SituationAnalysisResult,
 } from '../services/api';
 import {
   CitizenReport,
@@ -40,6 +41,8 @@ import {
   Edit3,
   PackageCheck,
   RotateCw,
+  Brain,
+  Copy,
 } from 'lucide-react';
 
 export function CommandCenterPage() {
@@ -108,6 +111,7 @@ export function CommandCenterPage() {
 
   const [deliveryNotes, setDeliveryNotes] = useState<string>('');
   const [promoteLoading, setPromoteLoading] = useState<boolean>(false);
+  const [generatingPlan, setGeneratingPlan] = useState<boolean>(false);
 
   // What-If Simulation State (PRD Module 9)
   const [simScenarioType, setSimScenarioType] = useState<
@@ -123,22 +127,28 @@ export function CommandCenterPage() {
   const [simError, setSimError] = useState<string | null>(null);
   const [simResult, setSimResult] = useState<SimulationRunResponse | null>(null);
 
+  // Phase 2B: AI Situation Analysis State
+  const [situationAnalysis, setSituationAnalysis] = useState<SituationAnalysisResult | null>(null);
+  const [analyzingReports, setAnalyzingReports] = useState<boolean>(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
   // Active Bottom Tab
-  const [activeTab, setActiveTab] = useState<'reports' | 'roads' | 'simulation'>('reports');
+  const [activeTab, setActiveTab] = useState<'reports' | 'roads' | 'simulation' | 'analysis'>('reports');
 
   // Load all initial operational datasets
   const loadCommandData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [kpisRes, zonesRes, sheltersRes, centersRes, roadsRes, reportsRes] =
+      const [kpisRes, zonesRes, sheltersRes, centersRes, roadsRes, reportsRes, situationRes] =
         await Promise.all([
           api.getDemoKPIs().catch(() => null),
           api.getZones({ limit: 10 }),
           api.getShelters({ limit: 25 }),
           api.getResourceCenters(),
           api.getRoadSegments(),
-          api.getReports({ limit: 30 }),
+          api.getReports({ limit: 50 }),
+          api.getDisasterSituation('disaster-assam-2026').catch(() => null),
         ]);
 
       startTransition(() => {
@@ -148,6 +158,7 @@ export function CommandCenterPage() {
         setCenters(centersRes.items);
         setRoads(roadsRes.items);
         setReports(reportsRes.items);
+        setSituationAnalysis(situationRes);
       });
     } catch (err: unknown) {
       const msg =
@@ -427,6 +438,60 @@ export function CommandCenterPage() {
     }
   };
 
+  // Generate Response Plan for Current Zone (Task 1)
+  const handleGeneratePlan = async () => {
+    if (!selectedZoneId) return;
+    setGeneratingPlan(true);
+    setActionFeedback(null);
+    try {
+      const res = await api.generateZonePlan(selectedZoneId, {
+        planning_days: planningDays,
+        notes: `Operational response plan drafted for ${selectedZone?.name || selectedZoneId}`,
+      });
+      setActionFeedback({
+        type: 'success',
+        message: `Response plan #${res.recommendation.id} drafted successfully for ${selectedZone?.name || selectedZoneId}! Ready for review and approval.`,
+      });
+      await loadZoneDecisionData(selectedZoneId, planningDays);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to generate response plan for zone.';
+      setActionFeedback({ type: 'error', message: msg });
+    } finally {
+      setGeneratingPlan(false);
+    }
+  };
+
+  // Phase 2B: Execute Citizen Report Situation Analysis
+  const handleRunAnalysis = async (forceReanalyze: boolean = false) => {
+    if (!canManagePlans) return;
+    setAnalyzingReports(true);
+    setAnalysisError(null);
+    try {
+      const disasterId = kpiData?.disaster_id || 'disaster-assam-2026';
+      const result = await api.analyzeDisasterSituation(disasterId, {
+        limit: 100,
+        force_reanalyze: forceReanalyze,
+      });
+      setSituationAnalysis(result);
+      setActionFeedback({
+        type: 'success',
+        message: `Situation analysis complete: ${result.total_reports_analyzed} reports evaluated via ${result.provider}. ${result.clusters.length} duplicate clusters detected.`,
+      });
+      // Refresh reports list to reflect 'analyzed' status
+      const updatedReports = await api.getReports({ limit: 50 }).catch(() => null);
+      if (updatedReports) setReports(updatedReports.items);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Analysis failed';
+      setAnalysisError(msg);
+      setActionFeedback({
+        type: 'error',
+        message: `Situation analysis error: ${msg}`,
+      });
+    } finally {
+      setAnalyzingReports(false);
+    }
+  };
+
   // Handle What-If Simulation Execution (PRD Module 9)
   const handleRunSimulation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -554,10 +619,10 @@ export function CommandCenterPage() {
               {loading ? (
                 <div className="h-7 w-20 bg-slate-800 rounded animate-pulse" />
               ) : (
-                kpiData?.kpis.affected_population.toLocaleString() || '18,420'
+                kpiData?.kpis.affected_population.toLocaleString() || '—'
               )}
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">Across 7 critical sectors</div>
+            <div className="text-[11px] text-slate-400 mt-1">Across {zones.length} monitored sectors</div>
           </div>
 
           {/* KPI 2: Critical Zones */}
@@ -570,10 +635,12 @@ export function CommandCenterPage() {
               {loading ? (
                 <div className="h-7 w-12 bg-slate-800 rounded animate-pulse" />
               ) : (
-                zones.filter((z) => z.band === 'Critical').length || kpiData?.kpis.critical_zones_count || '7'
+                zones.filter((z) => z.band === 'Critical').length || kpiData?.kpis.critical_zones_count || 0
               )}
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">Zone A Priority: 94/100</div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              {zones[0] ? `${zones[0].name} Priority: ${zones[0].priority_score}/100` : 'Assessing Priority'}
+            </div>
           </div>
 
           {/* KPI 3: Active Disaster */}
@@ -583,7 +650,11 @@ export function CommandCenterPage() {
               <Shield className="w-4 h-4 text-amber-400" />
             </div>
             <div className="text-sm font-black text-white truncate" title={kpiData?.disaster_name || 'Assam Flood'}>
-              {loading ? <div className="h-5 w-24 bg-slate-800 rounded animate-pulse" /> : 'Assam Monsoon'}
+              {loading ? (
+                <div className="h-5 w-24 bg-slate-800 rounded animate-pulse" />
+              ) : (
+                kpiData?.disaster_name || 'Assam Monsoon Flood 2024'
+              )}
             </div>
             <div className="text-[11px] text-amber-300 font-semibold mt-1">Threat Level 4 &bull; Active</div>
           </div>
@@ -616,10 +687,10 @@ export function CommandCenterPage() {
               {loading ? (
                 <div className="h-7 w-12 bg-slate-800 rounded animate-pulse" />
               ) : (
-                totalFleetUnits || kpiData?.kpis.total_fleet || kpiData?.kpis.vehicles_deployed || '21'
+                totalFleetUnits || kpiData?.kpis.total_fleet || kpiData?.kpis.vehicles_deployed || 0
               )}
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">{centers.length || 5} Centers Staged (Available)</div>
+            <div className="text-[11px] text-slate-400 mt-1">{centers.length} Centers Staged (Available)</div>
           </div>
 
           {/* KPI 6: Ingested Citizen Reports */}
@@ -632,7 +703,7 @@ export function CommandCenterPage() {
               {loading ? (
                 <div className="h-7 w-12 bg-slate-800 rounded animate-pulse" />
               ) : (
-                reports.length || kpiData?.kpis.total_reports_ingested || '32'
+                reports.length || kpiData?.kpis.total_reports_ingested || 0
               )}
             </div>
             <div className="text-[11px] text-slate-400 mt-1">Queued for AI extraction</div>
@@ -1252,19 +1323,63 @@ export function CommandCenterPage() {
                       </div>
                     )}
 
-                    {/* Delivered Message */}
+                    {/* Delivered Message & Option to Generate Plan for Next Horizon */}
                     {activePlan.status === 'delivered' && (
-                      <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>Mission completed successfully. Supplies delivered to designated relief sector.</span>
+                      <div className="space-y-3">
+                        <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>Mission completed successfully. Supplies delivered to designated relief sector.</span>
+                        </div>
+                        {canManagePlans && (
+                          <button
+                            type="button"
+                            onClick={handleGeneratePlan}
+                            disabled={generatingPlan || decisionLoading}
+                            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-950/40 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                          >
+                            {generatingPlan ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                                <span>Generating Next Horizon Plan...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4 text-cyan-200" />
+                                <span>Draft Response Plan for Next Cycle ({planningDays}-Day Horizon)</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
                     )}
 
-                    {/* Rejected Message */}
+                    {/* Rejected Message & Option to Generate New Plan */}
                     {activePlan.status === 'rejected' && (
-                      <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-xl text-xs text-red-300 flex items-center gap-2">
-                        <XCircle className="w-4 h-4 text-red-400 shrink-0" />
-                        <span>Plan rejected. New demand calculation or parameters required.</span>
+                      <div className="space-y-3">
+                        <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-xl text-xs text-red-300 flex items-center gap-2">
+                          <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                          <span>Plan rejected. New demand calculation or response parameters required.</span>
+                        </div>
+                        {canManagePlans && (
+                          <button
+                            type="button"
+                            onClick={handleGeneratePlan}
+                            disabled={generatingPlan || decisionLoading}
+                            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-950/40 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                          >
+                            {generatingPlan ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                                <span>Generating New Draft Plan...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4 text-cyan-200" />
+                                <span>Generate New Response Plan ({planningDays}-Day Horizon)</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -1275,9 +1390,44 @@ export function CommandCenterPage() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400">
-                    No active recommendation drafted for {selectedZone?.name}. Select <button type="button" onClick={() => setSelectedZoneId('zone-a')} className="text-cyan-400 underline font-semibold cursor-pointer">Zone A</button> to inspect the canonical response plan.
-                  </p>
+                  <div className="space-y-3 bg-[#070b12] p-4 rounded-xl border border-[#1f2e48]">
+                    <div className="flex items-start gap-2.5">
+                      <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <h5 className="font-bold text-xs text-white">
+                          No Active Response Plan for {selectedZone?.name || 'Selected Sector'}
+                        </h5>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Synthesize real-time population distress, accessible transportation routes, nearest shelter availability, and regional warehouse inventories to draft a deterministic response plan.
+                        </p>
+                      </div>
+                    </div>
+
+                    {canManagePlans ? (
+                      <button
+                        type="button"
+                        onClick={handleGeneratePlan}
+                        disabled={generatingPlan || decisionLoading}
+                        className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-950/50 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {generatingPlan ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-white" />
+                            <span>Synthesizing Plan &amp; Checking Road Corridors...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 text-cyan-200" />
+                            <span>Generate Response Plan ({planningDays}-Day Horizon)</span>
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <div className="text-[11px] text-slate-500 italic p-2 bg-[#131e31] rounded-lg">
+                        Clearance Note: Executive plan generation is restricted to Command Center Officers and Administrators.
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -1326,12 +1476,82 @@ export function CommandCenterPage() {
               <Sliders className="w-4 h-4" />
               <span>What-If Simulation Engine</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('analysis')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+                activeTab === 'analysis'
+                  ? 'bg-cyan-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Brain className="w-4 h-4 text-cyan-300" />
+              <span>AI Situation Analysis</span>
+              {situationAnalysis && situationAnalysis.total_reports_analyzed > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">
+                  {situationAnalysis.total_reports_analyzed}
+                </span>
+              )}
+            </button>
           </div>
 
           <div className="p-5">
             {/* Tab 1: Citizen Distress Reports Table */}
             {activeTab === 'reports' && (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Reports Queue Intelligence Action Bar */}
+                <div className="bg-[#131e31] border border-[#1f2e48] rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-cyan-950/80 border border-cyan-800 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-cyan-400" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-2">
+                        <span>Citizen Distress Queue Intelligence</span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800">
+                          {reports.filter((r) => r.status === 'pending_ai').length} Pending Analysis
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        {situationAnalysis && situationAnalysis.total_reports_analyzed > 0
+                          ? `Evaluated: ${situationAnalysis.total_reports_analyzed} reports (${situationAnalysis.clusters.length} duplicate clusters detected)`
+                          : 'NLP & Gemini pipeline ready to extract structured severity, medical urgency, and duplicate clusters.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('analysis')}
+                      className="px-3 py-1.5 rounded-lg bg-[#0d1522] hover:bg-[#1a2842] border border-[#1f2e48] text-xs font-semibold text-slate-300 transition cursor-pointer"
+                    >
+                      View Situation Overview &rarr;
+                    </button>
+                    {canManagePlans && (
+                      <button
+                        type="button"
+                        onClick={() => handleRunAnalysis(false)}
+                        disabled={analyzingReports}
+                        className="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow"
+                      >
+                        {analyzingReports ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Analyzing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Analyze Pending Reports</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between text-xs text-slate-400">
                   <span>Displaying live citizen situations ingested via public channels and web forms.</span>
                   <span className="text-[11px] text-cyan-400">Clearance: Contact details revealed to verified officers</span>
@@ -1918,6 +2138,303 @@ export function CommandCenterPage() {
                         ))}
                       </ul>
                     </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 4: Phase 2B AI Situation Analysis Overview */}
+            {activeTab === 'analysis' && (
+              <div className="space-y-6">
+                {/* Header Action Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-[#131e31] border border-[#1f2e48]">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-cyan-950 border border-cyan-800 text-cyan-400">
+                        <Brain className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          <span>AI-Assisted Situation Analysis &amp; Citizen Intelligence</span>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded font-mono uppercase ${
+                              situationAnalysis?.provider === 'gemini-1.5-pro'
+                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                : 'bg-blue-950 text-blue-300 border border-blue-800'
+                            }`}
+                          >
+                            {situationAnalysis?.provider === 'gemini-1.5-pro'
+                              ? 'Gemini 1.5 Pro Active'
+                              : 'Deterministic NLP Fallback'}
+                          </span>
+                        </h3>
+                        <p className="text-[11px] text-slate-400">
+                          Extracts structured needs, detects duplicate reports, and flags life-safety emergencies.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    {canManagePlans && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleRunAnalysis(false)}
+                          disabled={analyzingReports}
+                          className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-lg"
+                        >
+                          {analyzingReports ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Analyzing Queue...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4" />
+                              <span>Analyze Unprocessed Reports</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRunAnalysis(true)}
+                          disabled={analyzingReports}
+                          className="px-3 py-2 rounded-xl bg-[#0d1522] hover:bg-[#1a2842] border border-[#1f2e48] text-slate-300 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+                          title="Force re-extraction of all citizen reports"
+                        >
+                          <RotateCw className={`w-3.5 h-3.5 ${analyzingReports ? 'animate-spin' : ''}`} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Analysis Error Alert */}
+                {analysisError && (
+                  <div className="p-3.5 rounded-xl bg-red-950/70 border border-red-800 text-red-200 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>{analysisError}</span>
+                  </div>
+                )}
+
+                {/* Content Section */}
+                {situationAnalysis && situationAnalysis.total_reports_analyzed > 0 ? (
+                  <div className="space-y-6">
+                    {/* 1. Executive Summary Box */}
+                    <div className="p-5 rounded-2xl bg-gradient-to-r from-[#0d1522] via-[#131e31] to-[#0d1522] border border-cyan-500/30 space-y-3 shadow-xl">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-cyan-400" />
+                          <span>Executive Situation Overview</span>
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          {situationAnalysis.total_reports_analyzed} citizen submissions synthesized &bull;{' '}
+                          {situationAnalysis.high_severity_count} high/critical
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-sans">
+                        {situationAnalysis.summary}
+                      </p>
+                    </div>
+
+                    {/* 2. Structured Verification Columns (Facts, Inferred, Uncertainties) */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Column A: Verified Facts */}
+                      <div className="p-4 rounded-xl bg-[#0d1522] border border-[#1f2e48] space-y-3">
+                        <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                          <CheckCircle className="w-4 h-4 text-emerald-400" />
+                          <span>Directly Reported Facts</span>
+                        </div>
+                        <ul className="space-y-2 text-xs text-slate-300">
+                          {situationAnalysis.reported_facts.length > 0 ? (
+                            situationAnalysis.reported_facts.map((fact, idx) => (
+                              <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                                <span className="text-emerald-400 font-bold">&bull;</span>
+                                <span>{fact}</span>
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-slate-500 italic">No direct facts extracted.</li>
+                          )}
+                        </ul>
+                      </div>
+
+                      {/* Column B: Inferred Findings */}
+                      <div className="p-4 rounded-xl bg-[#0d1522] border border-[#1f2e48] space-y-3">
+                        <div className="flex items-center gap-2 text-xs font-bold text-cyan-400 uppercase tracking-wider">
+                          <Sparkles className="w-4 h-4 text-cyan-400" />
+                          <span>Inferred Findings &amp; Deductions</span>
+                        </div>
+                        <ul className="space-y-2 text-xs text-slate-300">
+                          {situationAnalysis.inferred_findings.length > 0 ? (
+                            situationAnalysis.inferred_findings.map((inf, idx) => (
+                              <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                                <span className="text-cyan-400 font-bold">&bull;</span>
+                                <span>{inf}</span>
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-slate-500 italic">No analytical deductions available.</li>
+                          )}
+                        </ul>
+                      </div>
+
+                      {/* Column C: Uncertainties & Conflict Warnings */}
+                      <div className="p-4 rounded-xl bg-[#0d1522] border border-amber-900/40 space-y-3">
+                        <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
+                          <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          <span>Uncertainties &amp; Field Warnings</span>
+                        </div>
+                        <ul className="space-y-2 text-xs text-slate-300">
+                          {situationAnalysis.uncertain_information.map((unc, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-amber-200/90 leading-relaxed">
+                              <span className="text-amber-400 font-bold">&bull;</span>
+                              <span>{unc}</span>
+                            </li>
+                          ))}
+                          {situationAnalysis.unresolved_conflicts.map((conf, idx) => (
+                            <li key={`conf-${idx}`} className="flex items-start gap-2 text-red-300 leading-relaxed font-semibold">
+                              <span className="text-red-400 font-bold">&bull;</span>
+                              <span>{conf}</span>
+                            </li>
+                          ))}
+                          {situationAnalysis.uncertain_information.length === 0 &&
+                            situationAnalysis.unresolved_conflicts.length === 0 && (
+                              <li className="text-slate-500 italic">Zero conflicting or unresolved claims.</li>
+                            )}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* 3. Category Breakdown & Urgent Demands */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Categories Breakdown */}
+                      <div className="p-4 rounded-xl bg-[#0d1522] border border-[#1f2e48] space-y-3">
+                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                          Citizen Distress by Category
+                        </h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                          {Object.entries(situationAnalysis.categories_breakdown).map(([cat, data]) => (
+                            <div key={cat} className="p-2.5 rounded-lg bg-[#131e31] border border-[#1f2e48]">
+                              <div className="text-[10px] uppercase font-bold text-slate-400 truncate">
+                                {cat.replace('_', ' ')}
+                              </div>
+                              <div className="text-lg font-black text-white mt-0.5">
+                                {data.count}{' '}
+                                <span className="text-[10px] font-normal text-slate-400">({data.percentage}%)</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Urgent Demands */}
+                      <div className="p-4 rounded-xl bg-[#0d1522] border border-[#1f2e48] space-y-3">
+                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                          Prioritized Urgent Resource Demands
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {situationAnalysis.urgent_needs.map((n) => (
+                            <div
+                              key={n.need}
+                              className="px-3 py-1.5 rounded-lg bg-cyan-950/70 border border-cyan-800/80 text-cyan-200 text-xs font-semibold flex items-center gap-2"
+                            >
+                              <span className="capitalize">{n.need.replace('_', ' ')}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-cyan-800 text-[10px] font-mono text-white">
+                                {n.count} calls
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. Detected Duplicate Clusters (PRD Module 2 & 3) */}
+                    <div className="p-4 rounded-xl bg-[#0d1522] border border-[#1f2e48] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Copy className="w-4 h-4 text-cyan-400" />
+                          <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                            Duplicate Report Clusters ({situationAnalysis.clusters.length} Groups Detected)
+                          </h4>
+                        </div>
+                        <span className="text-[11px] text-slate-400">
+                          Guarantees zero duplicate dispatches without deleting original citizen submissions
+                        </span>
+                      </div>
+
+                      {situationAnalysis.clusters.length > 0 ? (
+                        <div className="space-y-2.5">
+                          {situationAnalysis.clusters.map((cluster) => (
+                            <div
+                              key={cluster.cluster_id}
+                              className="p-3.5 rounded-xl bg-[#131e31] border border-[#1f2e48] hover:border-cyan-500/40 transition space-y-2"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-bold text-cyan-400">{cluster.cluster_id}</span>
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-950 text-blue-300 border border-blue-800">
+                                    {cluster.category}
+                                  </span>
+                                  {cluster.shared_location && (
+                                    <span className="text-slate-300 font-semibold">
+                                      &bull; {cluster.shared_location}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-[11px] font-mono">
+                                  <span className="text-emerald-400 font-bold">
+                                    {Math.round(cluster.confidence * 100)}% Match
+                                  </span>
+                                  <span className="text-slate-500">&bull;</span>
+                                  <span className="text-slate-300">
+                                    {cluster.total_reports} Reports Consolidated
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-xs text-slate-300 flex items-center gap-2">
+                                <span className="text-slate-500">Reason:</span>
+                                <span>{cluster.reason}</span>
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-mono">
+                                Primary: <span className="text-white">{cluster.primary_report_id}</span> &bull;
+                                Duplicates: {cluster.duplicate_report_ids.join(', ')} &bull; Consolidated Affected: ~{cluster.combined_people_estimate} people
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-xl bg-[#131e31] text-center text-xs text-slate-400">
+                          All analyzed reports describe geographically distinct incidents. No duplicate clusters found.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 rounded-2xl bg-[#0d1522] border border-[#1f2e48] text-center space-y-4">
+                    <div className="w-12 h-12 rounded-2xl bg-cyan-950 border border-cyan-800 flex items-center justify-center mx-auto text-cyan-400">
+                      <Brain className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-white">No Situation Analysis Run Yet</h4>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        Trigger the AI Situation Analysis to extract structured incident categories, medical priorities,
+                        and cluster duplicate citizen distress submissions.
+                      </p>
+                    </div>
+                    {canManagePlans && (
+                      <button
+                        type="button"
+                        onClick={() => handleRunAnalysis(false)}
+                        disabled={analyzingReports}
+                        className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition cursor-pointer shadow-lg inline-flex items-center gap-2 disabled:opacity-50"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>Run AI Situation Analysis Now</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

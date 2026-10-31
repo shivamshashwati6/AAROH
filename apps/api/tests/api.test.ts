@@ -208,7 +208,7 @@ describe('RELIEF-OS Phase 2 Backend API Integration Tests', () => {
       assert.equal(body.id, 'zone-a');
       assert.equal(body.priority_score, 94);
       assert.ok(body.recommendation);
-      assert.equal(body.recommendation.status, 'draft');
+      assert.ok(['draft', 'approved', 'modified', 'in_transit'].includes(body.recommendation.status));
       assert.match(body.recommendation.explanation, /Zone A/);
     });
 

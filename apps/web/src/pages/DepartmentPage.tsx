@@ -507,7 +507,7 @@ export function DepartmentPage() {
               Monitored Zones: <span className="text-white font-bold">{zones.length} Zones</span>
             </div>
             <div>
-              Affected Pop: <span className="text-white font-bold">{kpiData?.kpis.affected_population.toLocaleString() || '18,420'}</span>
+              Affected Pop: <span className="text-white font-bold">{kpiData?.kpis.affected_population.toLocaleString() || '—'}</span>
             </div>
           </div>
         </div>
@@ -585,7 +585,9 @@ export function DepartmentPage() {
                       {kpiData?.hero_zone.medical_risk.toUpperCase() || 'CRITICAL'}
                     </div>
                     <div className="text-[11px] text-slate-400 mt-1">
-                      Zone A: 1 team allocated from Barpeta Relief Base #3 (center-3)
+                      {kpiData?.hero_zone
+                        ? `${kpiData.hero_zone.name}: ${kpiData.hero_zone.recommended_action.medical_teams} team(s) from ${kpiData.hero_zone.recommended_action.source_center}`
+                        : 'Assessing priority zone allocation...'}
                     </div>
                   </div>
                 </>
@@ -609,9 +611,9 @@ export function DepartmentPage() {
                       <Package className="w-4 h-4 text-emerald-400" />
                     </div>
                     <div className="text-2xl font-black text-white">
-                      {totalWarehouseFood > 0 ? totalWarehouseFood.toLocaleString() : '15,200'} Kits
+                      {loading ? '...' : totalWarehouseFood.toLocaleString()} Kits
                     </div>
-                    <div className="text-[11px] text-slate-400 mt-1">Staged in 5 relief centers</div>
+                    <div className="text-[11px] text-slate-400 mt-1">Staged in {centers.length} relief centers</div>
                   </div>
 
                   <div className="bg-[#0d1522] border border-[#1f2e48] rounded-2xl p-5 shadow-lg">
@@ -620,7 +622,7 @@ export function DepartmentPage() {
                       <LifeBuoy className="w-4 h-4 text-blue-400" />
                     </div>
                     <div className="text-2xl font-black text-white">
-                      {totalWarehouseWater > 0 ? totalWarehouseWater.toLocaleString() : '13,400'} Units
+                      {loading ? '...' : totalWarehouseWater.toLocaleString()} Units
                     </div>
                     <div className="text-[11px] text-slate-400 mt-1">Clean water units in inventory</div>
                   </div>

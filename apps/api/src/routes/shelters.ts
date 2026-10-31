@@ -137,9 +137,10 @@ shelterRouter.get('/suggest', async (req: Request, res: Response) => {
     }
   }
 
+  // Return 400 if neither zone_id nor coordinates specified
   if (lat === undefined || lng === undefined) {
     return res.status(400).json({
-      error: 'Either zone_id or both lat and lng parameters are required to calculate shelter proximity',
+      error: 'Either zone_id or both lat and lng coordinates must be specified for shelter suggestions',
     });
   }
 

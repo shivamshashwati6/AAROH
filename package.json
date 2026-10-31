@@ -8,11 +8,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
+    "dev": "node scripts/dev.js",
+    "dev:all": "node scripts/dev.js",
     "dev:web": "npm run dev --workspace=@relief-os/web",
     "dev:api": "npm run dev --workspace=@relief-os/api",
-    "build": "npm run build --workspaces --if-present",
-    "build:web": "npm run build --workspace=@relief-os/web",
+    "build": "npm run build --workspaces --if-present && node -e \"const fs=require('fs'); if(fs.existsSync('apps/web/dist')) { if(fs.existsSync('dist')) fs.rmSync('dist', { recursive: true, force: true }); fs.cpSync('apps/web/dist', 'dist', { recursive: true }); }\"",
+    "build:web": "npm run build --workspace=@relief-os/web && node -e \"const fs=require('fs'); if(fs.existsSync('apps/web/dist')) { if(fs.existsSync('dist')) fs.rmSync('dist', { recursive: true, force: true }); fs.cpSync('apps/web/dist', 'dist', { recursive: true }); }\"",
     "build:api": "npm run build --workspace=@relief-os/api",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",

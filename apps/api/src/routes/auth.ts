@@ -130,16 +130,21 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       [email]
     );
 
+    console.log(`[API Login] Attempt: email="${email}", portal="${portal}", passLen=${password.length}`);
+
     // Uniform timing-safe error response to prevent user enumeration
     if (userRes.rows.length === 0) {
+      console.warn(`[API Login Failed] User not found: "${email}"`);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     const row = userRes.rows[0];
     const passwordValid = await verifyPassword(password, row.password_hash);
     if (!passwordValid) {
+      console.warn(`[API Login Failed] Password mismatch for: "${email}" (passLen=${password.length})`);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
+    console.log(`[API Login Success] Authenticated: "${email}", role="${row.role}", dept="${row.department}"`);
 
     // Role-based portal authorization validation
     if (targetPortal) {

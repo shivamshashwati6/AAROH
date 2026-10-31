@@ -104,9 +104,12 @@ export function NavigationHeader() {
 
               {/* Logout Button */}
               <button
+                id="header-logout-btn"
+                type="button"
                 onClick={handleLogout}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/50 border border-red-800/50 text-red-300 text-xs font-semibold transition"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/50 border border-red-800/50 text-red-300 text-xs font-semibold transition cursor-pointer"
                 title="Sign out of AAROH session"
+                aria-label="Sign out of AAROH session"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span className="hidden xs:inline">Sign Out</span>

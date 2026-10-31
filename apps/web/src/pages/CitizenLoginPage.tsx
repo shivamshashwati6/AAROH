@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getSafeRedirectForUser } from '../utils/auth-roles';
+import { getSafeRedirectForUser, isCitizenRole } from '../utils/auth-roles';
 import {
   Users,
   Lock,
@@ -27,9 +27,9 @@ export function CitizenLoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // If already authenticated and not loading, redirect to citizen destination
+  // If already authenticated with citizen authorization and not loading, redirect to citizen destination
   useEffect(() => {
-    if (!isLoading && isAuthenticated && user) {
+    if (!isLoading && isAuthenticated && user && isCitizenRole(user.role)) {
       const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
       navigate(getSafeRedirectForUser(user, fromPath), { replace: true });
     }

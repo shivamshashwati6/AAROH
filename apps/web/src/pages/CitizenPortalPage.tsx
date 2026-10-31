@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { NavigationHeader } from '../components/NavigationHeader';
 import { api, ApiError, ShelterSuggestionItem, CreateReportPayload } from '../services/api';
-import { Shelter, RoadSegment } from '@relief-os/shared';
+import { Shelter, RoadSegment, CitizenReport } from '@relief-os/shared';
 import {
   AlertTriangle,
   Building2,
@@ -64,6 +64,35 @@ export function CitizenPortalPage() {
   const [reportSuccessId, setReportSuccessId] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  // Tracked Citizen Distress Report (persistent across modal closes)
+  const [trackedReportId, setTrackedReportId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('aaroh_citizen_tracked_report') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [trackedReport, setTrackedReport] = useState<CitizenReport | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState<boolean>(false);
+
+  const refreshTrackedReport = useCallback(async (id: string) => {
+    setTrackingLoading(true);
+    try {
+      const rep = await api.getReportById(id);
+      setTrackedReport(rep);
+    } catch {
+      // Non-blocking fallback
+    } finally {
+      setTrackingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (trackedReportId) {
+      refreshTrackedReport(trackedReportId);
+    }
+  }, [trackedReportId, refreshTrackedReport]);
+
   // Load live citizen data from backend
   const loadCitizenData = useCallback(async () => {
     setLoading(true);
@@ -107,7 +136,13 @@ export function CitizenPortalPage() {
 
     try {
       const count = Math.max(1, familyMembers);
-      const res = await api.suggestShelters({ people: count, limit: 3 });
+      const res = await api.suggestShelters({
+        people: count,
+        limit: 3,
+        lat: 26.3211,
+        lng: 91.0045,
+        zone_id: 'zone-a',
+      });
       setFamilySuggestions(res.suggestions);
     } catch (err: unknown) {
       setSuggestError('Unable to calculate shelter suggestions right now. Please browse the list below.');
@@ -144,6 +179,13 @@ export function CitizenPortalPage() {
 
       const res = await api.submitReport(payload);
       setReportSuccessId(res.id);
+      setTrackedReportId(res.id);
+      setTrackedReport(res);
+      try {
+        localStorage.setItem('aaroh_citizen_tracked_report', res.id);
+      } catch {
+        // localStorage non-blocking
+      }
       setReportDesc('');
       setReportPhone('');
     } catch (err: unknown) {
@@ -245,6 +287,72 @@ export function CitizenPortalPage() {
             </div>
           </div>
         </section>
+
+        {/* Tracked Active Citizen Distress Signal */}
+        {trackedReportId && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#0d1522] border border-amber-500/50 shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-950/70 border border-amber-600/70 flex items-center justify-center shrink-0 mt-0.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-bold text-white text-sm">Your Active Distress Signal</h3>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800">
+                      ID: {trackedReportId}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                        trackedReport?.status === 'verified'
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                          : trackedReport?.status === 'analyzed'
+                          ? 'bg-blue-950 text-blue-300 border border-blue-700'
+                          : 'bg-amber-950 text-amber-300 border border-amber-700 animate-pulse'
+                      }`}
+                    >
+                      {trackedReport?.status === 'verified'
+                        ? 'VERIFIED & IN DISPATCH'
+                        : trackedReport?.status === 'analyzed'
+                        ? 'INTELLIGENCE ANALYZED'
+                        : 'PENDING AI TRIAGE'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1">
+                    {trackedReport
+                      ? `${trackedReport.location_name || 'Assam Flood Zone'}: "${trackedReport.description}"`
+                      : 'Distress signal received and queued for emergency coordination.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={() => refreshTrackedReport(trackedReportId)}
+                  disabled={trackingLoading}
+                  className="px-3 py-1.5 rounded-lg bg-[#131e31] hover:bg-[#1a2842] border border-[#1f2e48] text-cyan-300 text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${trackingLoading ? 'animate-spin' : ''}`} />
+                  <span>Check Status</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrackedReportId(null);
+                    setTrackedReport(null);
+                    try {
+                      localStorage.removeItem('aaroh_citizen_tracked_report');
+                    } catch {}
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#131e31] hover:bg-[#1a2842] text-slate-400 hover:text-white text-xs transition cursor-pointer"
+                  title="Dismiss tracking banner"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 2. Error Banner & Retry Action */}
         {error && (

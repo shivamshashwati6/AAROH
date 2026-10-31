@@ -393,6 +393,74 @@ describe('RELIEF-OS Command Center Dashboard Integration & Data Tests', () => {
       assert.equal(res.success, true);
       assert.equal(res.recommendation.status, 'rejected');
     });
+
+    it('should generate a new draft response plan for a zone via POST /zones/:id/plan', async () => {
+      let capturedBody: any = null;
+      let capturedUrl = '';
+      let capturedMethod = '';
+
+      globalThis.fetch = async (input, init) => {
+        capturedUrl = String(input);
+        capturedMethod = init?.method || 'GET';
+        capturedBody = JSON.parse(String(init?.body || '{}'));
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Response plan rec-zone-b-001 drafted successfully.',
+            recommendation: {
+              id: 'rec-zone-b-001',
+              zone_id: 'zone-b',
+              status: 'draft',
+              created_at: new Date().toISOString(),
+            },
+            plan: {
+              zone_name: 'Zone B',
+              score: 88,
+              priority_rank: 2,
+              source_center: 'Barpeta Base',
+              resources_recommended: { boats: 3, food_kits: 947, water_units: 639, medical_teams: 1 },
+            },
+            explanation: 'Zone B draft recommendation created.',
+          }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } }
+        );
+      };
+
+      const res = await api.generateZonePlan('zone-b', { planning_days: 3 });
+      assert.ok(capturedUrl.endsWith('/zones/zone-b/plan'));
+      assert.equal(capturedMethod, 'POST');
+      assert.equal(capturedBody.planning_days, 3);
+      assert.equal(res.success, true);
+      assert.equal(res.recommendation.id, 'rec-zone-b-001');
+      assert.equal(res.recommendation.status, 'draft');
+      assert.equal(res.plan.score, 88);
+    });
+
+    it('should handle conflict error (409) when an active plan already exists', async () => {
+      globalThis.fetch = async () => {
+        return new Response(
+          JSON.stringify({
+            error: 'An active response plan already exists for this zone',
+            code: 'ACTIVE_PLAN_EXISTS',
+            active_plan_id: 'rec-zone-a-001',
+            status: 'approved',
+          }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } }
+        );
+      };
+
+      await assert.rejects(
+        async () => {
+          await api.generateZonePlan('zone-a', { planning_days: 3 });
+        },
+        (err: unknown) => {
+          assert.ok(err instanceof ApiError);
+          assert.equal(err.status, 409);
+          assert.match(err.message, /active response plan already exists/i);
+          return true;
+        }
+      );
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -508,6 +576,120 @@ describe('RELIEF-OS Command Center Dashboard Integration & Data Tests', () => {
           assert.ok(err instanceof ApiError);
           assert.equal(err.status, 400);
           assert.ok(err.message.includes('Cannot remove 50 boats'));
+          return true;
+        }
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 6. Phase 2B: AI Situation Analysis Client Integration
+  // ---------------------------------------------------------------------------
+  describe('Phase 2B: AI Situation Analysis Client Integration', () => {
+    it('should trigger situation analysis via POST /disasters/:id/analyze', async () => {
+      let capturedUrl = '';
+      let capturedMethod = '';
+      let capturedBody: any = null;
+
+      globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        capturedUrl = input.toString();
+        capturedMethod = init?.method || 'GET';
+        capturedBody = init?.body ? JSON.parse(init.body as string) : null;
+
+        return new Response(
+          JSON.stringify({
+            id: 'sit-test-123',
+            disaster_id: 'disaster-assam-2026',
+            disaster_name: 'Assam Flood Response',
+            provider: 'deterministic_fallback',
+            total_reports_analyzed: 5,
+            pending_reports_remaining: 0,
+            summary: '5 reports evaluated across flood sector.',
+            reported_facts: ['4 people trapped on roof near Barpeta High School'],
+            inferred_findings: ['High rescue demand in Zone A'],
+            uncertain_information: [],
+            unresolved_conflicts: [],
+            categories_breakdown: { rescue: { count: 3, percentage: 60 } },
+            severity_breakdown: { critical: 2, high: 2, medium: 1, low: 0 },
+            urgent_needs: [{ need: 'rescue', count: 3 }],
+            high_severity_count: 4,
+            clusters: [
+              {
+                cluster_id: 'cluster-test-1',
+                primary_report_id: 'rep-1',
+                duplicate_report_ids: ['rep-2'],
+                total_reports: 2,
+                confidence: 0.95,
+                reason: 'Identical distress text reported within same coordinates',
+                shared_location: 'Barpeta High School',
+                combined_people_estimate: 4,
+                category: 'rescue',
+              },
+            ],
+            high_severity_reports: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      };
+
+      const res = await api.analyzeDisasterSituation('disaster-assam-2026', { limit: 50 });
+      assert.ok(capturedUrl.endsWith('/disasters/disaster-assam-2026/analyze'));
+      assert.equal(capturedMethod, 'POST');
+      assert.equal(capturedBody.limit, 50);
+      assert.equal(res.id, 'sit-test-123');
+      assert.equal(res.clusters.length, 1);
+      assert.equal(res.clusters[0].total_reports, 2);
+    });
+
+    it('should retrieve latest situation analysis via GET /disasters/:id/situation', async () => {
+      let capturedUrl = '';
+
+      globalThis.fetch = async (input: RequestInfo | URL) => {
+        capturedUrl = input.toString();
+        return new Response(
+          JSON.stringify({
+            id: 'sit-test-123',
+            disaster_id: 'disaster-assam-2026',
+            disaster_name: 'Assam Flood Response',
+            provider: 'gemini-1.5-pro',
+            total_reports_analyzed: 25,
+            pending_reports_remaining: 0,
+            summary: 'Comprehensive situation analysis.',
+            reported_facts: [],
+            inferred_findings: [],
+            uncertain_information: [],
+            unresolved_conflicts: [],
+            categories_breakdown: {},
+            severity_breakdown: {},
+            urgent_needs: [],
+            high_severity_count: 5,
+            clusters: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      };
+
+      const res = await api.getDisasterSituation('disaster-assam-2026');
+      assert.ok(capturedUrl.endsWith('/disasters/disaster-assam-2026/situation'));
+      assert.equal(res.total_reports_analyzed, 25);
+      assert.equal(res.provider, 'gemini-1.5-pro');
+    });
+
+    it('should throw ApiError when analyze request fails on forbidden authorization', async () => {
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({ error: 'Forbidden: Insufficient role permissions' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+
+      await assert.rejects(
+        async () => {
+          await api.analyzeDisasterSituation('disaster-assam-2026');
+        },
+        (err: unknown) => {
+          assert.ok(err instanceof ApiError);
+          assert.equal(err.status, 403);
+          assert.ok(err.message.includes('Forbidden'));
           return true;
         }
       );

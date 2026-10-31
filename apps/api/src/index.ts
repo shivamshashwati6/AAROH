@@ -38,8 +38,8 @@ const configuredOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
 
 const isAllowedOrigin = (origin: string): boolean => {
   if (configuredOrigins.includes(origin)) return true;
-  // Local development on localhost or 127.0.0.1 (any port)
-  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  // Local development on localhost, 127.0.0.1, or IPv6 loopback [::1] (any port)
+  if (/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin)) return true;
   // Production Vercel frontend origin
   if (origin === 'https://aaroh-plum.vercel.app') return true;
   // Vercel preview deployments (e.g. https://aaroh-*-shivamshashwati6s-projects.vercel.app)

@@ -454,3 +454,194 @@ export async function calculateZoneAllocation(
   const context = await loadZoneAllocationContext(zoneId, options);
   return context.baselineAllocation;
 }
+
+export interface DisasterShortageItem {
+  resource_type: 'food_kits' | 'water_units' | 'boats' | 'medical_teams';
+  name: string;
+  demanded: number;
+  available: number;
+  deficit: number;
+}
+
+export interface DisasterShortageResult {
+  shortages_count: number;
+  shortages: DisasterShortageItem[];
+  total_demands: {
+    food_kits: number;
+    water_units: number;
+    boats: number;
+    medical_teams: number;
+  };
+  total_available: {
+    food_kits: number;
+    water_units: number;
+    boats: number;
+    medical_teams: number;
+  };
+}
+
+/**
+ * Calculates dynamic disaster-wide supply shortages across tracked resource categories.
+ * Evaluates aggregate zone demand against live warehouse stock and regional depot fleets.
+ * Prevents duplicate counting: each tracked category (food_kits, water_units, boats, medical_teams)
+ * is counted at most once if a regional deficit exists.
+ */
+export async function calculateDisasterShortages(
+  disasterId?: string,
+  options?: { planning_days?: number }
+): Promise<DisasterShortageResult> {
+  const planningDays = options?.planning_days ?? 3;
+
+  // 1. Fetch zones for disaster (fallback to all zones if none match disasterId or if disasterId omitted)
+  let zonesQuery = `
+    SELECT 
+      z.id, 
+      z.disaster_id, 
+      z.name, 
+      z.population, 
+      z.affected_population, 
+      z.severity, 
+      z.medical_risk, 
+      z.accessibility::float as accessibility, 
+      z.vulnerability::float as vulnerability, 
+      z.priority_score, 
+      z.band, 
+      z.breakdown_json, 
+      d.is_simulated
+    FROM zones z
+    LEFT JOIN disasters d ON d.id = z.disaster_id
+  `;
+  const params: unknown[] = [];
+  if (disasterId) {
+    zonesQuery += ` WHERE z.disaster_id = $1`;
+    params.push(disasterId);
+  }
+
+  let zonesRes = await query(zonesQuery, params);
+
+  if (zonesRes.rows.length === 0 && disasterId) {
+    zonesRes = await query(`
+      SELECT 
+        z.id, 
+        z.disaster_id, 
+        z.name, 
+        z.population, 
+        z.affected_population, 
+        z.severity, 
+        z.medical_risk, 
+        z.accessibility::float as accessibility, 
+        z.vulnerability::float as vulnerability, 
+        z.priority_score, 
+        z.band, 
+        z.breakdown_json, 
+        d.is_simulated
+      FROM zones z
+      LEFT JOIN disasters d ON d.id = z.disaster_id
+    `);
+  }
+
+  const totalDemands = {
+    food_kits: 0,
+    water_units: 0,
+    boats: 0,
+    medical_teams: 0,
+  };
+
+  // 2. Aggregate demand across zones
+  for (const row of zonesRes.rows) {
+    const breakdown = row.breakdown_json || {};
+    const demandInput: ZoneDemandInput = {
+      zone_id: row.id,
+      zone_name: row.name,
+      affected_population: row.affected_population,
+      total_population: row.population,
+      severity: row.severity,
+      medical_risk: row.medical_risk,
+      accessibility: row.accessibility,
+      vulnerability: row.vulnerability,
+      priority_score: row.priority_score,
+      band: row.band,
+      food_shortage_pct: breakdown.food_shortage_pct,
+      water_shortage_pct: breakdown.water_shortage_pct,
+      is_simulated: row.is_simulated !== null ? Boolean(row.is_simulated) : true,
+    };
+
+    const demandRes = calculateZoneDemand(demandInput, { planning_days: planningDays });
+    totalDemands.food_kits += demandRes.demands.food_kits.quantity;
+    totalDemands.water_units += demandRes.demands.water_units.quantity;
+    totalDemands.boats += demandRes.demands.boats.quantity;
+    totalDemands.medical_teams += demandRes.demands.medical_teams.quantity;
+  }
+
+  // 3. Aggregate available inventory across relief centers
+  const totalAvailable = {
+    food_kits: 0,
+    water_units: 0,
+    boats: 0,
+    medical_teams: 0,
+  };
+
+  // Warehouse inventory
+  const resourcesRes = await query<{ resource_type: string; total_qty: string }>(
+    `SELECT resource_type, coalesce(sum(quantity), 0) as total_qty 
+     FROM resources 
+     WHERE status = 'available' 
+     GROUP BY resource_type`
+  );
+
+  for (const r of resourcesRes.rows) {
+    const norm = normalizeResourceType(r.resource_type);
+    if (norm) {
+      totalAvailable[norm] += Math.max(0, parseInt(r.total_qty, 10) || 0);
+    }
+  }
+
+  // Resource center fleets and clinical teams
+  const centersRes = await query<{ total_boats: string; total_med: string }>(
+    `SELECT 
+      coalesce(sum(boats_available), 0) as total_boats, 
+      coalesce(sum(medical_teams_available), 0) as total_med 
+     FROM resource_centers`
+  );
+
+  if (centersRes.rows.length > 0) {
+    const centerBoats = parseInt(centersRes.rows[0].total_boats, 10) || 0;
+    const centerMed = parseInt(centersRes.rows[0].total_med, 10) || 0;
+    totalAvailable.boats = Math.max(totalAvailable.boats, centerBoats);
+    totalAvailable.medical_teams = Math.max(totalAvailable.medical_teams, centerMed);
+  }
+
+  // 4. Determine shortages distinctly across the 4 tracked categories
+  const categories: Array<{
+    type: 'food_kits' | 'water_units' | 'boats' | 'medical_teams';
+    name: string;
+  }> = [
+    { type: 'food_kits', name: 'Food Relief Ration Kits' },
+    { type: 'water_units', name: 'Potable Drinking Water Units' },
+    { type: 'boats', name: 'Deployable Rescue Boats' },
+    { type: 'medical_teams', name: 'Certified Medical Response Teams' },
+  ];
+
+  const shortages: DisasterShortageItem[] = [];
+
+  for (const cat of categories) {
+    const demanded = totalDemands[cat.type];
+    const available = totalAvailable[cat.type];
+    if (demanded > available) {
+      shortages.push({
+        resource_type: cat.type,
+        name: cat.name,
+        demanded,
+        available,
+        deficit: demanded - available,
+      });
+    }
+  }
+
+  return {
+    shortages_count: shortages.length,
+    shortages,
+    total_demands: totalDemands,
+    total_available: totalAvailable,
+  };
+}
