@@ -24,8 +24,11 @@
  *    - Promotes a What-If simulation run into a DRAFT response plan with zero operational side-effects.
  */
 
+import { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { getPool, query } from '../db';
 import { loadZoneAllocationContext } from './allocation';
+import { calculateZoneDemand, ZoneDemandInput } from './demand';
+import { calculatePriorityScore, ZoneFactorInputs } from './priority';
 import {
   PlanStatus,
   ModifyPlanPayload,
@@ -63,15 +66,19 @@ export interface PlanRow {
 /**
  * Resolves supplying center ID from ID or name.
  */
-export async function resolveCenterId(centerIdOrName?: string | null): Promise<{ id: string; name: string }> {
+export async function resolveCenterId(
+  centerIdOrName?: string | null,
+  client?: { query: <R extends QueryResultRow = any>(text: string, params?: unknown[]) => Promise<QueryResult<R>> }
+): Promise<{ id: string; name: string }> {
   if (!centerIdOrName || typeof centerIdOrName !== 'string') {
     return { id: 'center-3', name: 'Barpeta Relief Base #3' };
   }
 
+  const runner = client || { query };
   const trimmed = centerIdOrName.trim();
 
   // Try direct ID match
-  const res = await query<{ id: string; name: string }>(
+  const res = await runner.query<{ id: string; name: string }>(
     `SELECT id, name FROM resource_centers WHERE id = $1 OR name ILIKE $1 LIMIT 1`,
     [trimmed]
   );
@@ -83,7 +90,7 @@ export async function resolveCenterId(centerIdOrName?: string | null): Promise<{
   const digitMatch = trimmed.match(/(?:center[_-]?)?barpeta[_-]?0?([1-5])/i) || trimmed.match(/center[_-]?0?([1-5])/i);
   if (digitMatch) {
     const aliasId = `center-${digitMatch[1]}`;
-    const aliasRes = await query<{ id: string; name: string }>(
+    const aliasRes = await runner.query<{ id: string; name: string }>(
       `SELECT id, name FROM resource_centers WHERE id = $1 LIMIT 1`,
       [aliasId]
     );
@@ -93,7 +100,7 @@ export async function resolveCenterId(centerIdOrName?: string | null): Promise<{
   }
 
   // Try partial name match (e.g. 'Center #3', 'Barpeta', 'Guwahati')
-  const partial = await query<{ id: string; name: string }>(
+  const partial = await runner.query<{ id: string; name: string }>(
     `SELECT id, name FROM resource_centers WHERE name ILIKE '%' || $1 || '%' LIMIT 1`,
     [trimmed.replace(/Relief Center #?/i, '').trim()]
   );
@@ -297,7 +304,7 @@ export async function modifyResponsePlan(
  */
 export async function dispatchResponsePlan(
   planId: string,
-  payload: DispatchPlanPayload | undefined,
+  payload: (DispatchPlanPayload & { action?: 'execute' | 'dispatch' }) | undefined,
   user: { id: string; name?: string; role?: string }
 ): Promise<{
   success: boolean;
@@ -349,7 +356,7 @@ export async function dispatchResponsePlan(
 
     // 4. Resolve supplying center
     const planJson = currentPlan.plan || {};
-    const centerInfo = await resolveCenterId(planJson.source_center_id || planJson.source_center);
+    const centerInfo = await resolveCenterId(planJson.source_center_id || planJson.source_center, client);
     const centerId = centerInfo.id;
 
     const resourcesReq = planJson.resources_recommended || {};
@@ -461,17 +468,22 @@ export async function dispatchResponsePlan(
     }
 
     // 10. Immutable Audit Logging
+    const auditAction = payload?.action === 'execute' ? 'PLAN_EXECUTED' : 'PLAN_DISPATCHED';
     await client.query(
       `INSERT INTO audit_log (user_id, action, details) VALUES ($1, $2, $3)`,
       [
         user.id,
-        'PLAN_DISPATCHED',
+        auditAction,
         JSON.stringify({
           recommendation_id: planId,
           zone_id: currentPlan.zone_id,
           center_id: centerId,
           center_name: centerInfo.name,
           deductions: deductionsMade,
+          status_from: 'approved',
+          status_to: 'in_transit',
+          action: auditAction,
+          executed_by: user.id,
           dispatched_by: user.id,
           dispatched_by_name: user.name,
           execution_notes: execNotes,
@@ -497,12 +509,13 @@ export async function dispatchResponsePlan(
 
 /**
  * Marks an in-transit response plan as successfully delivered.
+ * Recalculates the zone's remaining shortage using existing deterministic demand logic (PRD Module 10 / Requirement 6).
  */
 export async function markPlanDelivered(
   planId: string,
   payload: { notes?: string } | undefined,
   user: { id: string; name?: string; role?: string }
-): Promise<PlanRow> {
+): Promise<PlanRow & { remaining_shortages?: Record<string, number>; zone_recalculation?: any }> {
   const existing = await getPlanById(planId);
 
   if (existing.status === 'delivered') {
@@ -517,27 +530,220 @@ export async function markPlanDelivered(
     );
   }
 
-  const completionNotes = payload?.notes?.trim() || 'Mission successfully completed';
+  const pool = getPool();
+  const client = await pool.connect();
 
-  const updateRes = await query<PlanRow>(
-    `UPDATE recommendations
-     SET status = 'delivered',
-         completed_at = CURRENT_TIMESTAMP,
-         execution_notes = COALESCE(execution_notes, '') || ' [Delivered: ' || $1 || ']'
-     WHERE id = $2
-     RETURNING *`,
-    [completionNotes, planId]
-  );
-
-  // Update linked allocations
-  await query(
-    `UPDATE allocations SET status = 'delivered' WHERE plan_id = $1`,
-    [planId]
-  );
-
-  // Audit log
   try {
-    await query(
+    await client.query('BEGIN');
+
+    const completionNotes = payload?.notes?.trim() || 'Mission successfully completed';
+
+    // 1. Update recommendation status to 'delivered'
+    const updateRes = await client.query<PlanRow>(
+      `UPDATE recommendations
+       SET status = 'delivered',
+           completed_at = CURRENT_TIMESTAMP,
+           execution_notes = COALESCE(execution_notes, '') || ' [Delivered: ' || $1 || ']'
+       WHERE id = $2
+       RETURNING *`,
+      [completionNotes, planId]
+    );
+
+    // 2. Update linked allocations to delivered
+    await client.query(
+      `UPDATE allocations SET status = 'delivered' WHERE plan_id = $1`,
+      [planId]
+    );
+
+    // 3. Recalculate the zone's remaining shortage using existing demand logic (Requirement 6)
+    let remainingShortages: Record<string, number> = { food_kits: 0, water_units: 0, boats: 0, medical_teams: 0 };
+    let zoneRecalculation: any = null;
+
+    const zoneRes = await client.query(
+      `SELECT 
+        z.id, 
+        z.name, 
+        z.population, 
+        z.affected_population, 
+        z.severity, 
+        z.medical_risk, 
+        z.accessibility::float as accessibility, 
+        z.vulnerability::float as vulnerability, 
+        z.priority_score, 
+        z.band, 
+        z.breakdown_json
+       FROM zones z
+       WHERE z.id = $1
+       FOR UPDATE`,
+      [existing.zone_id]
+    );
+
+    if (zoneRes.rows.length > 0) {
+      const zoneRow = zoneRes.rows[0];
+      const breakdown = (zoneRow.breakdown_json as Record<string, any>) || {};
+
+      const baseFoodPct = typeof breakdown.initial_food_shortage_pct === 'number'
+        ? breakdown.initial_food_shortage_pct
+        : typeof breakdown.food_shortage_pct === 'number'
+        ? breakdown.food_shortage_pct
+        : zoneRow.severity === 'critical' ? 70 : 50;
+
+      const baseWaterPct = typeof breakdown.initial_water_shortage_pct === 'number'
+        ? breakdown.initial_water_shortage_pct
+        : typeof breakdown.water_shortage_pct === 'number'
+        ? breakdown.water_shortage_pct
+        : zoneRow.severity === 'critical' ? 60 : 45;
+
+      const baseShortageFactor = typeof breakdown.initial_resource_shortage === 'number'
+        ? breakdown.initial_resource_shortage
+        : typeof breakdown.resource_shortage === 'number'
+        ? breakdown.resource_shortage
+        : 0.80;
+
+      // Deterministic baseline demand calculation using existing demand engine
+      const demandInput: ZoneDemandInput = {
+        zone_id: zoneRow.id,
+        zone_name: zoneRow.name,
+        affected_population: Number(zoneRow.affected_population) || 0,
+        total_population: Number(zoneRow.population) || 0,
+        severity: (zoneRow.severity || 'high') as any,
+        medical_risk: (zoneRow.medical_risk || 'high') as any,
+        accessibility: Number(zoneRow.accessibility ?? 0.5),
+        vulnerability: Number(zoneRow.vulnerability ?? 0.5),
+        priority_score: zoneRow.priority_score,
+        band: zoneRow.band as any,
+        food_shortage_pct: baseFoodPct,
+        water_shortage_pct: baseWaterPct,
+        is_simulated: true,
+      };
+
+      const grossDemand = calculateZoneDemand(demandInput, { planning_days: 3 });
+
+      // Aggregate all delivered plans for this zone (including newly delivered plan)
+      const deliveredRecs = await client.query<{ plan: any }>(
+        `SELECT plan FROM recommendations WHERE zone_id = $1 AND status = 'delivered'`,
+        [existing.zone_id]
+      );
+
+      let totalDeliveredFood = 0;
+      let totalDeliveredWater = 0;
+      let totalDeliveredBoats = 0;
+      let totalDeliveredMed = 0;
+
+      for (const row of deliveredRecs.rows) {
+        const p = typeof row.plan === 'string' ? JSON.parse(row.plan) : (row.plan || {});
+        const res = p.resources_recommended || p.resources || {};
+        totalDeliveredFood += Number(res.food_kits) || 0;
+        totalDeliveredWater += Number(res.water_units) || 0;
+        totalDeliveredBoats += Number(res.boats) || 0;
+        totalDeliveredMed += Number(res.medical_teams) || 0;
+      }
+
+      const grossFood = grossDemand.demands.food_kits.quantity;
+      const grossWater = grossDemand.demands.water_units.quantity;
+      const grossBoats = grossDemand.demands.boats.quantity;
+      const grossMed = grossDemand.demands.medical_teams.quantity;
+
+      const remainingFood = Math.max(0, grossFood - totalDeliveredFood);
+      const remainingWater = Math.max(0, grossWater - totalDeliveredWater);
+      const remainingBoats = Math.max(0, grossBoats - totalDeliveredBoats);
+      const remainingMed = Math.max(0, grossMed - totalDeliveredMed);
+
+      remainingShortages = {
+        food_kits: remainingFood,
+        water_units: remainingWater,
+        boats: remainingBoats,
+        medical_teams: remainingMed,
+      };
+
+      const foodRatio = grossFood > 0 ? remainingFood / grossFood : 0;
+      const waterRatio = grossWater > 0 ? remainingWater / grossWater : 0;
+      const boatsRatio = grossBoats > 0 ? remainingBoats / grossBoats : 0;
+      const medRatio = grossMed > 0 ? remainingMed / grossMed : 0;
+
+      const newFoodPct = Math.round(baseFoodPct * foodRatio);
+      const newWaterPct = Math.round(baseWaterPct * waterRatio);
+
+      const activeDemands = [
+        ...(grossFood > 0 ? [foodRatio] : []),
+        ...(grossWater > 0 ? [waterRatio] : []),
+        ...(grossBoats > 0 ? [boatsRatio] : []),
+        ...(grossMed > 0 ? [medRatio] : []),
+      ];
+      const avgRatio = activeDemands.length > 0
+        ? activeDemands.reduce((sum, r) => sum + r, 0) / activeDemands.length
+        : 0;
+
+      const newResourceShortage = Math.min(
+        1,
+        Math.max(0, parseFloat((baseShortageFactor * avgRatio).toFixed(3)))
+      );
+
+      const factorInputs: ZoneFactorInputs = {
+        population_impact: typeof breakdown.population_impact === 'number' ? breakdown.population_impact : 0.95,
+        severity: typeof breakdown.severity === 'number' ? breakdown.severity : 0.98,
+        medical_risk: typeof breakdown.medical_risk === 'number' ? breakdown.medical_risk : 0.95,
+        resource_shortage: newResourceShortage,
+        accessibility_difficulty: typeof breakdown.accessibility_difficulty === 'number'
+          ? breakdown.accessibility_difficulty
+          : (1 - Number(zoneRow.accessibility)),
+        vulnerability: typeof breakdown.vulnerability === 'number'
+          ? breakdown.vulnerability
+          : Number(zoneRow.vulnerability),
+      };
+
+      const newScoreResult = calculatePriorityScore(factorInputs);
+
+      const updatedBreakdown = {
+        ...breakdown,
+        initial_food_shortage_pct: baseFoodPct,
+        initial_water_shortage_pct: baseWaterPct,
+        initial_resource_shortage: baseShortageFactor,
+        food_shortage_pct: newFoodPct,
+        water_shortage_pct: newWaterPct,
+        resource_shortage: newResourceShortage,
+        remaining_shortages: remainingShortages,
+        gross_demands: {
+          food_kits: grossFood,
+          water_units: grossWater,
+          boats: grossBoats,
+          medical_teams: grossMed,
+        },
+        delivered_totals: {
+          food_kits: totalDeliveredFood,
+          water_units: totalDeliveredWater,
+          boats: totalDeliveredBoats,
+          medical_teams: totalDeliveredMed,
+        },
+        last_delivery_recalculated_at: new Date().toISOString(),
+      };
+
+      await client.query(
+        `UPDATE zones
+         SET priority_score = $1,
+             band = $2,
+             breakdown_json = $3
+         WHERE id = $4`,
+        [
+          newScoreResult.priority_score,
+          newScoreResult.band,
+          JSON.stringify(updatedBreakdown),
+          zoneRow.id,
+        ]
+      );
+
+      zoneRecalculation = {
+        previous_priority_score: zoneRow.priority_score,
+        previous_band: zoneRow.band,
+        new_priority_score: newScoreResult.priority_score,
+        new_band: newScoreResult.band,
+        new_resource_shortage: newResourceShortage,
+        remaining_shortages: remainingShortages,
+      };
+    }
+
+    // 4. Immutable Audit Log
+    await client.query(
       `INSERT INTO audit_log (user_id, action, details) VALUES ($1, $2, $3)`,
       [
         user.id,
@@ -548,14 +754,28 @@ export async function markPlanDelivered(
           delivered_by: user.id,
           delivered_by_name: user.name,
           notes: completionNotes,
+          status_from: 'in_transit',
+          status_to: 'delivered',
+          remaining_shortages: remainingShortages,
+          zone_recalculation: zoneRecalculation,
         }),
       ]
     );
-  } catch (auditErr) {
-    console.warn('[Audit Log Warning]: Could not record plan delivery:', auditErr);
-  }
 
-  return updateRes.rows[0];
+    await client.query('COMMIT');
+
+    const resultRow = updateRes.rows[0];
+    return {
+      ...resultRow,
+      remaining_shortages: remainingShortages,
+      zone_recalculation: zoneRecalculation,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -617,7 +837,7 @@ export async function markPlanFailed(
     }
 
     const planJson = existing.plan || {};
-    const centerInfo = await resolveCenterId(planJson.source_center_id || planJson.source_center);
+    const centerInfo = await resolveCenterId(planJson.source_center_id || planJson.source_center, client);
     const centerId = centerInfo.id;
     const reqAmounts = planJson.resources_recommended || {};
 

@@ -610,6 +610,25 @@ export const api = {
     return handleResponse(res);
   },
 
+  /** Execute an approved response plan with atomic warehouse inventory deduction */
+  async executeRecommendation(
+    id: string,
+    payload?: DispatchPlanPayload
+  ): Promise<{
+    success: boolean;
+    message: string;
+    recommendation: RecommendationItem;
+    deductions?: Array<{ resource_type: string; quantity_deducted: number; remaining_stock: number }>;
+    already_dispatched?: boolean;
+  }> {
+    const res = await fetch(`${API_BASE_URL}/recommendations/${encodeURIComponent(id)}/execute`, {
+      method: 'POST',
+      headers: getRequestHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload || {}),
+    });
+    return handleResponse(res);
+  },
+
   /** Mark an in-transit response plan as delivered */
   async deliverRecommendation(
     id: string,
@@ -671,6 +690,9 @@ export const api = {
   },
   dispatchPlan(id: string, payload?: DispatchPlanPayload) {
     return api.dispatchRecommendation(id, payload);
+  },
+  executePlan(id: string, payload?: DispatchPlanPayload) {
+    return api.executeRecommendation(id, payload);
   },
   deliverPlan(id: string, notes?: string) {
     return api.deliverRecommendation(id, notes);

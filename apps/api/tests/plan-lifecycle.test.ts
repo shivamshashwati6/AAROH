@@ -46,6 +46,13 @@ async function resetStockAndAllocations() {
   await query(`UPDATE resources SET quantity = 2000 WHERE center_id = 'center-3' AND resource_type = 'water_units'`);
   await query(`UPDATE resources SET quantity = 4 WHERE center_id = 'center-3' AND resource_type = 'boats'`);
   await query(`UPDATE resources SET quantity = 5 WHERE center_id = 'center-3' AND resource_type = 'medical_teams'`);
+  await query(
+    `UPDATE zones 
+     SET priority_score = 88, 
+         band = 'Critical', 
+         breakdown_json = '{"population_impact": 0.88, "severity": 0.90, "medical_risk": 0.85, "resource_shortage": 0.80, "accessibility_difficulty": 0.70, "vulnerability": 0.75}'::jsonb 
+     WHERE id = 'zone-b'`
+  );
 }
 
 before(async () => {

@@ -8,6 +8,27 @@ import { User, AuthResponse } from '@relief-os/shared';
 
 export const authRouter = Router();
 
+function isDbConnectionError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as any;
+  return Boolean(
+    e.code === 'ECONNREFUSED' ||
+    e.code === 'ENOTFOUND' ||
+    e.code === 'ETIMEDOUT' ||
+    e.code === 'ECONNRESET' ||
+    e.code === '28P01' ||
+    e.code === '3D000' ||
+    e.code === '08001' ||
+    e.code === '08006' ||
+    e.code === '57P01' ||
+    e.message?.includes('ENOTFOUND') ||
+    e.message?.includes('Connection terminated') ||
+    e.message?.includes('timeout') ||
+    e.message?.includes('connect')
+  );
+}
+
+
 const registerSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(255),
   email: z.string().trim().toLowerCase().email('Invalid email address'),
@@ -93,6 +114,18 @@ authRouter.post('/register', async (req: Request, res: Response) => {
   } catch (err: unknown) {
     if (err instanceof AuthError) {
       return res.status(400).json({ error: err.message });
+    }
+    const e = err as any;
+    if (e && e.code === '23505') {
+      return res.status(409).json({
+        error: 'An account with this email address already exists',
+      });
+    }
+    if (isDbConnectionError(err)) {
+      console.error('[API Register Error - Database Unavailable]:', err instanceof Error ? err.message : err);
+      return res.status(503).json({
+        error: 'Database service is temporarily unavailable. Please try again in a few moments.',
+      });
     }
     console.error('[API Register Error]:', err instanceof Error ? err.message : err);
     return res.status(500).json({ error: 'Failed to create user account' });
@@ -198,6 +231,15 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
     return res.status(200).json(response);
   } catch (err: unknown) {
+    if (err instanceof AuthError) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (isDbConnectionError(err)) {
+      console.error('[API Login Error - Database Unavailable]:', err instanceof Error ? err.message : err);
+      return res.status(503).json({
+        error: 'Database service is temporarily unavailable. Please try again in a few moments.',
+      });
+    }
     console.error('[API Login Error]:', err instanceof Error ? err.message : err);
     return res.status(500).json({ error: 'Failed to authenticate user' });
   }

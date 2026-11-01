@@ -109,6 +109,34 @@ describe('RELIEF-OS Plan Lifecycle & Safe Inventory Web Client Tests', () => {
       assert.equal(result.recommendation.dispatched_by, 'usr-officer-1');
     });
 
+    it('executePlan should send POST to /execute and return in_transit status with deductions', async () => {
+      let capturedUrl = '';
+      let capturedMethod = '';
+
+      globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+        capturedUrl = String(url);
+        capturedMethod = init?.method || 'GET';
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Response plan executed successfully',
+            recommendation: { ...mockPlan, status: 'in_transit', dispatched_by: 'usr-officer-1' },
+            deductions: [{ resource_type: 'food_kits', quantity_deducted: 250, remaining_stock: 950 }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }) as typeof fetch;
+
+      api.setToken('mock-officer-token');
+      const result = await api.executePlan('rec-zone-a-001', { execution_notes: 'Convoy executed' });
+
+      assert.ok(capturedUrl.endsWith('/recommendations/rec-zone-a-001/execute'));
+      assert.equal(capturedMethod, 'POST');
+      assert.equal(result.success, true);
+      assert.equal(result.recommendation.status, 'in_transit');
+    });
+
     it('dispatchPlan should throw ApiError with 409 and shortage details when warehouse is deficient', async () => {
       globalThis.fetch = (async () => {
         return new Response(

@@ -323,12 +323,12 @@ export function CommandCenterPage() {
     setActionLoading(true);
     setDispatchError(null);
     try {
-      await api.dispatchPlan(activePlan.id, {
+      await api.executePlan(activePlan.id, {
         execution_notes: dispatchNotes.trim() || undefined,
       });
       setActionFeedback({
         type: 'success',
-        message: `Plan #${activePlan.id} dispatched! Inventory deducted in atomic transaction. Status is now IN TRANSIT.`,
+        message: `Plan #${activePlan.id} successfully executed! Inventory deducted in atomic transaction. Status is now IN TRANSIT.`,
       });
       setShowDispatchModal(false);
       setDispatchNotes('');
@@ -1200,6 +1200,81 @@ export function CommandCenterPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* Delivery Progress Stepper */}
+                      <div className="bg-[#070b12] border border-[#1f2e48] rounded-xl p-3 space-y-2">
+                        <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                          <span>Delivery &amp; Execution Progress</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                            activePlan.status === 'delivered'
+                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                              : activePlan.status === 'in_transit'
+                              ? 'bg-cyan-950 text-cyan-300 border border-cyan-800 animate-pulse'
+                              : activePlan.status === 'failed'
+                              ? 'bg-red-950 text-red-300 border border-red-800'
+                              : activePlan.status === 'approved'
+                              ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800'
+                              : 'bg-slate-900 text-slate-400 border border-slate-700'
+                          }`}>
+                            {activePlan.status.replace('_', ' ')}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-1.5 pt-1 text-center">
+                          {/* Step 1: Approved */}
+                          <div className={`p-2 rounded-lg border ${
+                            ['approved', 'in_transit', 'delivered', 'failed'].includes(activePlan.status)
+                              ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
+                              : 'bg-[#131e31] border-[#1f2e48] text-slate-500'
+                          }`}>
+                            <div className="text-[10px] font-bold flex items-center justify-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>1. Approved</span>
+                            </div>
+                            <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                              {activePlan.approved_at ? new Date(activePlan.approved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}
+                            </div>
+                          </div>
+
+                          {/* Step 2: In Transit */}
+                          <div className={`p-2 rounded-lg border ${
+                            ['in_transit', 'delivered', 'failed'].includes(activePlan.status)
+                              ? activePlan.status === 'in_transit'
+                                ? 'bg-cyan-950/70 border-cyan-600 text-cyan-300 ring-1 ring-cyan-500'
+                                : 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
+                              : 'bg-[#131e31] border-[#1f2e48] text-slate-500'
+                          }`}>
+                            <div className="text-[10px] font-bold flex items-center justify-center gap-1">
+                              <Truck className={`w-3.5 h-3.5 ${activePlan.status === 'in_transit' ? 'animate-pulse' : ''}`} />
+                              <span>2. In Transit</span>
+                            </div>
+                            <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                              {activePlan.dispatched_at ? new Date(activePlan.dispatched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}
+                            </div>
+                          </div>
+
+                          {/* Step 3: Delivered or Failed */}
+                          <div className={`p-2 rounded-lg border ${
+                            activePlan.status === 'delivered'
+                              ? 'bg-emerald-950/60 border-emerald-600 text-emerald-200 ring-1 ring-emerald-500'
+                              : activePlan.status === 'failed'
+                              ? 'bg-red-950/60 border-red-800 text-red-300 ring-1 ring-red-500'
+                              : 'bg-[#131e31] border-[#1f2e48] text-slate-500'
+                          }`}>
+                            <div className="text-[10px] font-bold flex items-center justify-center gap-1">
+                              {activePlan.status === 'failed' ? (
+                                <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                              ) : (
+                                <PackageCheck className="w-3.5 h-3.5" />
+                              )}
+                              <span>3. {activePlan.status === 'failed' ? 'Failed' : 'Delivered'}</span>
+                            </div>
+                            <div className="text-[9px] text-slate-400 mt-0.5 truncate">
+                              {activePlan.completed_at ? new Date(activePlan.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Action Controls by Lifecycle Phase */}
@@ -1244,7 +1319,7 @@ export function CommandCenterPage() {
                       </div>
                     )}
 
-                    {/* Approved -> Dispatch Control */}
+                    {/* Approved -> Dispatch / Execute Control */}
                     {activePlan.status === 'approved' && canManagePlans && (
                       <div className="space-y-2 bg-[#070b12] p-3 rounded-xl border border-emerald-900/40">
                         <div className="text-[11px] text-emerald-300 flex items-center gap-1.5">
@@ -1253,12 +1328,13 @@ export function CommandCenterPage() {
                         </div>
                         <button
                           type="button"
+                          data-testid="execute-plan-btn"
                           onClick={handleOpenDispatchModal}
                           disabled={actionLoading}
                           className="w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-950/50 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                         >
                           <Truck className="w-4 h-4" />
-                          <span>Execute &amp; Dispatch Response Plan (Deduct Inventory)</span>
+                          <span>Execute Response Plan</span>
                         </button>
                       </div>
                     )}
@@ -2675,7 +2751,7 @@ export function CommandCenterPage() {
                 className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs cursor-pointer disabled:opacity-50 shadow-lg shadow-cyan-950/50 flex items-center gap-1.5"
               >
                 <Truck className="w-4 h-4" />
-                <span>{actionLoading ? 'Executing Atomic Dispatch...' : 'Authorize & Dispatch'}</span>
+                <span>{actionLoading ? 'Executing Response Plan...' : 'Execute Response Plan'}</span>
               </button>
             </div>
           </div>

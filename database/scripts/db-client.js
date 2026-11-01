@@ -26,8 +26,35 @@ function isPlaceholder(val) {
   );
 }
 
+function normalizeDatabaseUrl(rawUrl) {
+  if (!rawUrl || isPlaceholder(rawUrl)) return rawUrl;
+  try {
+    const parsed = new URL(rawUrl);
+    const directMatch = parsed.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
+    if (directMatch) {
+      const ref = directMatch[1];
+      const region = process.env.SUPABASE_REGION || process.env.DB_REGION || 'ap-northeast-2';
+      parsed.hostname = `aws-0-${region}.pooler.supabase.com`;
+      if (!parsed.username.includes('.')) {
+        parsed.username = `${parsed.username}.${ref}`;
+      }
+      if (!parsed.port || parsed.port === '5432') {
+        parsed.port = '5432';
+      }
+    }
+    if (parsed.searchParams.has('sslmode')) {
+      parsed.searchParams.delete('sslmode');
+    }
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+
 function getDbConfig() {
-  const url = process.env.DATABASE_URL;
+  const rawUrl = process.env.DATABASE_URL;
+  const url = normalizeDatabaseUrl(rawUrl);
   const host = process.env.DB_HOST;
   const password = process.env.DB_PASSWORD;
 
@@ -44,7 +71,7 @@ function getDbConfig() {
   const sslRequired =
     process.env.DB_SSL === 'true' ||
     Boolean(isSupabase) ||
-    Boolean(url && url.includes('sslmode=require'));
+    Boolean(rawUrl && rawUrl.includes('sslmode=require'));
 
   const ssl = sslRequired && process.env.DB_SSL !== 'false' ? { rejectUnauthorized: false } : false;
 
@@ -68,7 +95,8 @@ function getDbConfig() {
 }
 
 function getSanitizedTarget() {
-  const url = process.env.DATABASE_URL;
+  const rawUrl = process.env.DATABASE_URL;
+  const url = normalizeDatabaseUrl(rawUrl);
   if (url && !isPlaceholder(url)) {
     return url.replace(/:([^:@]+)@/, ':****@');
   }

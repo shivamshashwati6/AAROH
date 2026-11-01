@@ -21,6 +21,42 @@ function isPlaceholder(val?: string): boolean {
   );
 }
 
+/**
+ * Normalizes Supabase database connection URLs for serverless / IPv4 environments.
+ * - Detects direct Supabase host pattern: db.<ref>.supabase.co
+ * - Rewrites hostname to IPv4-compatible pooler: aws-0-<region>.pooler.supabase.com
+ * - Formats username to postgres.<ref> if not already formatted
+ * - Ensures port 5432 (session pooler)
+ * - Strips sslmode query parameter so pg-connection-string does not force rejectUnauthorized: true
+ */
+export function normalizeDatabaseUrl(rawUrl?: string): string | undefined {
+  if (!rawUrl || isPlaceholder(rawUrl)) return rawUrl;
+  try {
+    const parsed = new URL(rawUrl);
+    // Detect direct Supabase host: db.<ref>.supabase.co
+    const directMatch = parsed.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
+    if (directMatch) {
+      const ref = directMatch[1];
+      const region = process.env.SUPABASE_REGION || process.env.DB_REGION || 'ap-northeast-2';
+      parsed.hostname = `aws-0-${region}.pooler.supabase.com`;
+      if (!parsed.username.includes('.')) {
+        parsed.username = `${parsed.username}.${ref}`;
+      }
+      if (!parsed.port || parsed.port === '5432') {
+        parsed.port = '5432';
+      }
+    }
+    // Remove sslmode query parameter so pg-connection-string does not override rejectUnauthorized: false
+    if (parsed.searchParams.has('sslmode')) {
+      parsed.searchParams.delete('sslmode');
+    }
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+
 export function isDbConfigured(): boolean {
   const url = process.env.DATABASE_URL;
   const host = process.env.DB_HOST;
@@ -38,10 +74,13 @@ export function isDbConfigured(): boolean {
 }
 
 export function getPoolConfig(): PoolConfig {
+  const rawUrl = process.env.DATABASE_URL;
+  const normalizedUrl = normalizeDatabaseUrl(rawUrl);
+
   const isSupabase =
-    (process.env.DATABASE_URL &&
-      (process.env.DATABASE_URL.includes('supabase.co') ||
-        process.env.DATABASE_URL.includes('supabase.com'))) ||
+    (normalizedUrl &&
+      (normalizedUrl.includes('supabase.co') ||
+        normalizedUrl.includes('supabase.com'))) ||
     (process.env.DB_HOST &&
       (process.env.DB_HOST.includes('supabase.co') ||
         process.env.DB_HOST.includes('supabase.com')));
@@ -49,13 +88,13 @@ export function getPoolConfig(): PoolConfig {
   const sslRequired =
     process.env.DB_SSL === 'true' ||
     Boolean(isSupabase) ||
-    Boolean(process.env.DATABASE_URL?.includes('sslmode=require'));
+    Boolean(rawUrl?.includes('sslmode=require'));
 
   const isServerless = Boolean(process.env.VERCEL);
   const baseConfig: PoolConfig = {
     max: isServerless ? 3 : 10,
     idleTimeoutMillis: isServerless ? 10000 : 30000,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 30000,
     keepAlive: true,
   };
 
@@ -65,10 +104,10 @@ export function getPoolConfig(): PoolConfig {
     };
   }
 
-  if (process.env.DATABASE_URL && !isPlaceholder(process.env.DATABASE_URL)) {
+  if (normalizedUrl && !isPlaceholder(normalizedUrl)) {
     return {
       ...baseConfig,
-      connectionString: process.env.DATABASE_URL,
+      connectionString: normalizedUrl,
     };
   }
 
@@ -157,7 +196,7 @@ export async function checkDbStatus(): Promise<DbStatus> {
       `);
 
       const target = process.env.DATABASE_URL
-        ? process.env.DATABASE_URL.replace(/:([^:@]+)@/, ':****@')
+        ? normalizeDatabaseUrl(process.env.DATABASE_URL)?.replace(/:([^:@]+)@/, ':****@')
         : `${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`;
 
       return {

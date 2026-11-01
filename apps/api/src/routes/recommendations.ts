@@ -483,12 +483,21 @@ async function handleDispatchPlan(req: Request, res: Response) {
     });
   }
 
+  const isExecuteAction = req.path.endsWith('/execute');
+
   try {
-    const result = await dispatchResponsePlan(id, parsed.data, {
-      id: req.user!.id,
-      name: req.user!.name,
-      role: req.user!.role,
-    });
+    const result = await dispatchResponsePlan(
+      id,
+      {
+        ...parsed.data,
+        action: isExecuteAction ? 'execute' : 'dispatch',
+      },
+      {
+        id: req.user!.id,
+        name: req.user!.name,
+        role: req.user!.role,
+      }
+    );
 
     return res.status(200).json(result);
   } catch (err: unknown) {
@@ -523,8 +532,10 @@ recommendationRouter.post(
 
       return res.status(200).json({
         success: true,
-        message: `Response plan #${id} marked as delivered. Mission verified.`,
+        message: `Response plan #${id} marked as delivered. Mission verified. Zone shortages recalculated.`,
         recommendation: updated,
+        remaining_shortages: updated.remaining_shortages,
+        zone_recalculation: updated.zone_recalculation,
       });
     } catch (err: unknown) {
       if (err instanceof PlanLifecycleError) {
