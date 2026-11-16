@@ -292,7 +292,14 @@ export function LoginPage() {
                 <div className="mb-4 p-3.5 rounded-xl bg-red-950/50 border border-red-800/60 text-red-300 text-xs flex items-start gap-2.5 animate-fadeIn">
                   <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <span className="font-semibold block mb-0.5">Authentication Failed</span>
+                    <span className="font-semibold block mb-0.5">
+                      {displayError.toLowerCase().includes('temporarily unavailable') ||
+                      displayError.toLowerCase().includes('database')
+                        ? 'Service Unavailable'
+                        : displayError.toLowerCase().includes('portal')
+                        ? 'Portal Access Restricted'
+                        : 'Authentication Failed'}
+                    </span>
                     <span>{displayError}</span>
                   </div>
                 </div>

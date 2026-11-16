@@ -163,7 +163,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
       // response was not JSON
     }
 
-    if (res.status === 401) {
+    if (res.status === 401 && !res.url?.endsWith('/auth/login') && !res.url?.endsWith('/auth/register')) {
       authErrorListeners.forEach((listener) => {
         try {
           listener();

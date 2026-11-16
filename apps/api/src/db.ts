@@ -42,9 +42,8 @@ export function normalizeDatabaseUrl(rawUrl?: string): string | undefined {
       if (!parsed.username.includes('.')) {
         parsed.username = `${parsed.username}.${ref}`;
       }
-      if (!parsed.port || parsed.port === '5432') {
-        parsed.port = '5432';
-      }
+      const poolerPort = process.env.SUPABASE_POOLER_PORT || (parsed.port === '6543' ? '6543' : '5432');
+      parsed.port = poolerPort;
     }
     // Remove sslmode query parameter so pg-connection-string does not override rejectUnauthorized: false
     if (parsed.searchParams.has('sslmode')) {

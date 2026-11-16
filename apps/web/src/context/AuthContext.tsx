@@ -94,9 +94,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setError(null);
         }
       } catch (err: unknown) {
-        // Expired or invalid token
-        if (isMounted) {
+        if (!isMounted) return;
+        // Strictly evict session ONLY if token is confirmed expired or invalid by backend (HTTP 401)
+        if (err instanceof ApiError && err.status === 401) {
           logout();
+        } else {
+          // In case of transient database downtime (HTTP 503) or network connectivity issue,
+          // preserve the authenticated session and cached user to prevent accidental logout on refresh.
+          console.warn('[AuthContext] Session restore encountered transient issue:', err instanceof Error ? err.message : err);
+          const cachedUser = safeStorage.getItem(AUTH_USER_KEY);
+          if (cachedUser) {
+            try {
+              setUser(JSON.parse(cachedUser) as User);
+              setToken(activeToken);
+            } catch {
+              // Ignore invalid cache JSON
+            }
+          }
         }
       } finally {
         if (isMounted) {

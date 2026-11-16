@@ -27,6 +27,13 @@ export function CitizenLoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const fillDemoCitizen = () => {
+    setEmail('citizen@relief.internal');
+    setPassword('Password123!');
+    setFormError(null);
+    clearError();
+  };
+
   // If already authenticated with citizen authorization and not loading, redirect to citizen destination
   useEffect(() => {
     if (!isLoading && isAuthenticated && user && isCitizenRole(user.role)) {
@@ -58,7 +65,10 @@ export function CitizenLoginPage() {
       const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
       navigate(getSafeRedirectForUser(loggedInUser, fromPath), { replace: true });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Authentication failed. Please check your credentials.';
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Authentication failed. Please check your credentials.';
       setFormError(msg);
     } finally {
       setSubmitting(false);
@@ -118,7 +128,7 @@ export function CitizenLoginPage() {
           </div>
 
           {/* Citizen Scope Notice */}
-          <div className="mb-6 bg-cyan-950/40 border border-cyan-800/50 p-3.5 rounded-xl flex items-start gap-3">
+          <div className="mb-4 bg-cyan-950/40 border border-cyan-800/50 p-3.5 rounded-xl flex items-start gap-3">
             <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
             <div className="text-xs text-slate-300 leading-relaxed">
               <span className="font-bold text-white block">Citizen Access Only</span>
@@ -126,12 +136,34 @@ export function CitizenLoginPage() {
             </div>
           </div>
 
+          {/* Quick Demo Citizen Credentials Bar */}
+          <div className="mb-6 p-3 bg-[#131e31] border border-[#1f2e48] rounded-xl flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold text-slate-300 block">Default Demo Account:</span>
+              <span className="text-[10px] text-slate-400 font-mono">citizen@relief.internal &bull; Password123!</span>
+            </div>
+            <button
+              type="button"
+              onClick={fillDemoCitizen}
+              className="py-1 px-3 text-xs bg-cyan-950/60 border border-cyan-800/60 hover:border-cyan-400 text-cyan-300 font-semibold rounded-lg transition cursor-pointer"
+            >
+              Fill Citizen Demo
+            </button>
+          </div>
+
           {/* Error Alert Box */}
           {displayError && (
             <div className="mb-6 p-4 rounded-xl bg-red-950/50 border border-red-800/60 text-red-300 text-xs flex items-start gap-3 animate-fadeIn">
               <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <span className="font-semibold block mb-0.5">Authentication Failed</span>
+                <span className="font-semibold block mb-0.5">
+                  {displayError.toLowerCase().includes('temporarily unavailable') ||
+                  displayError.toLowerCase().includes('database')
+                    ? 'Service Unavailable'
+                    : displayError.toLowerCase().includes('portal')
+                    ? 'Portal Access Restricted'
+                    : 'Authentication Failed'}
+                </span>
                 <span>{displayError}</span>
               </div>
             </div>

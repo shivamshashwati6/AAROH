@@ -38,9 +38,8 @@ function normalizeDatabaseUrl(rawUrl) {
       if (!parsed.username.includes('.')) {
         parsed.username = `${parsed.username}.${ref}`;
       }
-      if (!parsed.port || parsed.port === '5432') {
-        parsed.port = '5432';
-      }
+      const poolerPort = process.env.SUPABASE_POOLER_PORT || (parsed.port === '6543' ? '6543' : '5432');
+      parsed.port = poolerPort;
     }
     if (parsed.searchParams.has('sslmode')) {
       parsed.searchParams.delete('sslmode');
